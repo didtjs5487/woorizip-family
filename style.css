@@ -338,13 +338,23 @@ button, input, select, textarea { font-family: inherit; }
 .notice-mini.nudge { color: #C25A82; border-color: #F3C3D6; }
 .notice-mini.del { color: var(--danger); }
 
-/* ===== View toggles (calendar/list, shopping/wish) ===== */
+/* ===== View toggles (calendar/list, request sub-tabs) ===== */
 .view-toggle { display: flex; gap: 6px; background: var(--paper-dim); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
 .view-btn, .goods-view-btn {
   flex: 1; border: none; background: none; padding: 9px; border-radius: 9px;
   font-size: 13.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
 }
 .view-btn.active, .goods-view-btn.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow-pin); }
+
+/* ===== Request tab status strip ===== */
+.request-status { display: flex; gap: 8px; margin-bottom: 14px; }
+.status-chip {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 10px 6px; cursor: pointer; box-shadow: var(--shadow-pin);
+}
+.status-chip-count { font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--ink); }
+.status-chip-label { font-size: 11.5px; color: var(--ink-soft); }
 .list-date-header {
   display: flex; align-items: baseline; gap: 8px;
   margin: 18px 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--border);

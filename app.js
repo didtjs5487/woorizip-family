@@ -827,6 +827,7 @@ function buildTaskCard(t) {
 }
 
 function renderTasks() {
+  renderRequestStatus();
   const list = document.getElementById('tasks-list');
   if (!list) return;
   list.innerHTML = '';
@@ -925,20 +926,29 @@ document.getElementById('btn-delete-task').addEventListener('click', async () =>
   closeTaskModal();
 });
 
-/* ===================== Shopping / Wish sub-view toggle (per-device) ===================== */
+/* ===================== Request tab: 할일 / 장보기 / 위시 sub-view toggle (per-device) ===================== */
+const GOODS_VIEWS = ['tasks', 'shopping', 'wish'];
 function applyGoodsView(view) {
+  if (!GOODS_VIEWS.includes(view)) view = 'tasks';
   localStorage.setItem('goodsView', view);
-  document.getElementById('goods-view-shopping').classList.toggle('hidden', view !== 'shopping');
-  document.getElementById('goods-view-wish').classList.toggle('hidden', view !== 'wish');
+  GOODS_VIEWS.forEach(v => document.getElementById(`goods-view-${v}`).classList.toggle('hidden', v !== view));
   document.querySelectorAll('.goods-view-btn').forEach(b => b.classList.toggle('active', b.dataset.goodsView === view));
 }
-document.querySelectorAll('.goods-view-btn').forEach(btn => {
+document.querySelectorAll('.goods-view-btn, .status-chip').forEach(btn => {
   btn.addEventListener('click', () => applyGoodsView(btn.dataset.goodsView));
 });
-applyGoodsView(localStorage.getItem('goodsView') === 'wish' ? 'wish' : 'shopping');
+applyGoodsView(localStorage.getItem('goodsView'));
+
+function renderRequestStatus() {
+  const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+  setCount('status-count-tasks', Object.values(state.tasks).filter(t => !t.done).length);
+  setCount('status-count-shopping', Object.values(state.shopping).filter(i => !i.purchased).length);
+  setCount('status-count-wish', Object.values(state.wishes).filter(w => !w.done).length);
+}
 
 /* ===================== Shopping / household supplies ===================== */
 function renderShopping() {
+  renderRequestStatus();
   const list = document.getElementById('shopping-list');
   if (!list) return;
   list.innerHTML = '';
@@ -995,6 +1005,7 @@ document.querySelectorAll('.wish-filter').forEach(btn => {
 });
 
 function renderWishes() {
+  renderRequestStatus();
   const list = document.getElementById('wish-list');
   if (!list) return;
   list.innerHTML = '';
@@ -1102,7 +1113,8 @@ async function deleteNotice(id) {
 }
 function convertNoticeToTask(id) {
   const n = state.notices[id]; if (!n) return;
-  showTab('tasks');
+  showTab('request');
+  applyGoodsView('tasks');
   openTaskModal(null);
   document.getElementById('task-title').value = (n.text || '').slice(0, 60);
 }
