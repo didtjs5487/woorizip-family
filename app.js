@@ -35,7 +35,7 @@ const state = {
   userDoc: null,       // { name, email, familyId }
   familyId: null,
   familyDoc: null,      // { name, inviteCode }
-  members: {},          // uid -> { name, colorIndex, locationSharing, lastLocation }
+  members: {},          // uid -> { name, colorIndex }
   events: {},            // eventId -> event data
   tasks: {},             // taskId -> task data
   shopping: {},          // itemId -> shopping item data
@@ -60,11 +60,6 @@ const state = {
   unsubAnniversaries: null,
   eventsLoadedOnce: false,
   notifiedAnniversaryToday: null,
-  watchId: null,
-  lastPos: null,
-  map: null,
-  mapMarkers: {},
-  locationWriteInterval: null,
 };
 
 /* ===================== Screen / tab helpers ===================== */
@@ -76,7 +71,6 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
   document.getElementById(`tab-${name}`).classList.remove('hidden');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  if (name === 'map') setTimeout(initMapIfNeeded, 50);
   if (name === 'notice') markNoticesRead();
 }
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -124,7 +118,6 @@ document.getElementById('form-entry').addEventListener('submit', async (e) => {
       await famDoc.ref.collection('members').doc(uid).set({
         name,
         colorIndex: alreadyMember ? (membersSnap.docs.find(d => d.id === uid).data().colorIndex ?? 0) : membersSnap.size,
-        locationSharing: false, lastLocation: null
       }, { merge: true });
       await db.collection('users').doc(uid).set({ familyId: famDoc.id }, { merge: true });
       // the user-doc onSnapshot listener will drive enterFamily()
@@ -159,7 +152,7 @@ document.getElementById('btn-entry-create').addEventListener('click', async () =
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await familyRef.collection('members').doc(uid).set({
-      name: pendingEntry.name, colorIndex: 0, locationSharing: false, lastLocation: null
+      name: pendingEntry.name, colorIndex: 0
     });
     await db.collection('users').doc(uid).set({ name: pendingEntry.name, familyId: familyRef.id }, { merge: true });
     pendingEntry = null;
@@ -220,7 +213,6 @@ function teardownFamilyListeners() {
   if (state.unsubWishes) { state.unsubWishes(); state.unsubWishes = null; }
   if (state.unsubNotices) { state.unsubNotices(); state.unsubNotices = null; }
   if (state.unsubAnniversaries) { state.unsubAnniversaries(); state.unsubAnniversaries = null; }
-  stopLocationSharing(false);
   state.eventsLoadedOnce = false;
 }
 
@@ -240,7 +232,6 @@ function enterFamily(familyId) {
       renderAssigneeOptions();
       renderCalendar();
       renderDayPanel();
-      renderMapMembers();
     });
 
   state.unsubEvents = db.collection('families').doc(familyId).collection('events')
@@ -273,6 +264,8 @@ function enterFamily(familyId) {
       state.tasks = {};
       snap.forEach(doc => { state.tasks[doc.id] = { id: doc.id, ...doc.data() }; });
       renderTasks();
+      renderCalendar();
+      renderDayPanel();
     });
 
   state.unsubShopping = db.collection('families').doc(familyId).collection('shopping')
@@ -432,6 +425,21 @@ function eventOccursOn(ev, dateStr) {
 function eventsOnDate(dateStr) {
   return Object.values(state.events).filter(ev => eventOccursOn(ev, dateStr));
 }
+function taskOccursOn(t, dateStr) {
+  if (!t.dueDate) return false; // undated tasks only show in the 할일 tab
+  const repeat = t.repeat || 'none';
+  if (repeat === 'none') return t.dueDate === dateStr;
+  if (dateStr < t.dueDate) return false;
+  if (repeat === 'daily') return true;
+  if (repeat === 'weekly') {
+    const list = (t.weekdays && t.weekdays.length) ? t.weekdays : [weekdayOf(t.dueDate)];
+    return list.includes(weekdayOf(dateStr));
+  }
+  return false;
+}
+function tasksOnDate(dateStr) {
+  return Object.values(state.tasks).filter(t => taskOccursOn(t, dateStr));
+}
 function repeatLabelFor(ev) {
   const repeat = ev.repeat || 'none';
   if (repeat === 'daily') return '매일';
@@ -478,11 +486,14 @@ function renderCalendar() {
 
     const dots = document.createElement('div');
     dots.className = 'cal-day-dots';
-    const dayEvents = eventsOnDate(dateStr).slice(0, 4);
-    dayEvents.forEach(ev => {
+    const dayDots = [
+      ...eventsOnDate(dateStr).map(ev => ({ assignee: ev.assignee, isTask: false })),
+      ...tasksOnDate(dateStr).map(t => ({ assignee: t.assignee, isTask: true })),
+    ].slice(0, 4);
+    dayDots.forEach(({ assignee, isTask }) => {
       const dot = document.createElement('span');
-      dot.className = 'cal-dot';
-      dot.style.background = colorForAssignee(ev.assignee);
+      dot.className = 'cal-dot' + (isTask ? ' cal-dot-task' : '');
+      dot.style.background = colorForAssignee(assignee);
       dots.appendChild(dot);
     });
     cell.appendChild(dots);
@@ -509,6 +520,27 @@ function colorForAssignee(assignee) {
   return m ? colorFor(m.colorIndex) : '#B9AE94';
 }
 
+function buildEventCard(ev) {
+  const card = document.createElement('div');
+  card.className = 'event-card';
+  card.style.setProperty('--pin-color', colorForAssignee(ev.assignee));
+  const timeLabel = ev.allDay ? '하루 종일' : [ev.startTime, ev.endTime].filter(Boolean).join(' – ');
+  const assigneeName = ev.assignee === 'all' ? '전체' : (state.members[ev.assignee]?.name || '?');
+  const repeatLabel = repeatLabelFor(ev);
+  card.innerHTML = `
+    <p class="event-title">${escapeHtml(ev.title)}${repeatLabel ? ` <span class="repeat-chip">↻ ${repeatLabel}</span>` : ''}</p>
+    <div class="event-meta">
+      <span>${timeLabel}</span>
+      <span class="event-assignee-badge">
+        <span class="avatar-dot" style="background:${colorForAssignee(ev.assignee)}">${ev.assignee==='all'?'👪':initialsFor(assigneeName)}</span>
+        ${escapeHtml(assigneeName)}
+      </span>
+    </div>
+  `;
+  card.addEventListener('click', () => openEventModal(ev));
+  return card;
+}
+
 function renderDayPanel() {
   const [y,mo,da] = state.selectedDate.split('-').map(Number);
   const d = new Date(y, mo-1, da);
@@ -529,31 +561,14 @@ function renderDayPanel() {
 
   const dayEvents = eventsOnDate(state.selectedDate)
     .sort((a,b) => (a.allDay ? '' : a.startTime||'').localeCompare(b.allDay ? '' : b.startTime||''));
+  const dayTasks = tasksOnDate(state.selectedDate);
 
-  if (dayEvents.length === 0) {
+  if (dayEvents.length === 0 && dayTasks.length === 0) {
     if (dayAnniversaries.length === 0) list.innerHTML += '<p class="empty-state">이 날은 일정이 없어요.</p>';
     return;
   }
-  dayEvents.forEach(ev => {
-    const card = document.createElement('div');
-    card.className = 'event-card';
-    card.style.setProperty('--pin-color', colorForAssignee(ev.assignee));
-    const timeLabel = ev.allDay ? '하루 종일' : [ev.startTime, ev.endTime].filter(Boolean).join(' – ');
-    const assigneeName = ev.assignee === 'all' ? '전체' : (state.members[ev.assignee]?.name || '?');
-    const repeatLabel = repeatLabelFor(ev);
-    card.innerHTML = `
-      <p class="event-title">${escapeHtml(ev.title)}${repeatLabel ? ` <span class="repeat-chip">↻ ${repeatLabel}</span>` : ''}</p>
-      <div class="event-meta">
-        <span>${timeLabel}</span>
-        <span class="event-assignee-badge">
-          <span class="avatar-dot" style="background:${colorForAssignee(ev.assignee)}">${ev.assignee==='all'?'👪':initialsFor(assigneeName)}</span>
-          ${escapeHtml(assigneeName)}
-        </span>
-      </div>
-    `;
-    card.addEventListener('click', () => openEventModal(ev));
-    list.appendChild(card);
-  });
+  dayEvents.forEach(ev => list.appendChild(buildEventCard(ev)));
+  dayTasks.forEach(t => list.appendChild(buildTaskCard(t)));
 }
 
 /* ===================== Calendar / List view toggle (per-device) ===================== */
@@ -581,14 +596,15 @@ function renderEventList() {
     const dateStr = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
     const evs = eventsOnDate(dateStr)
       .sort((a, b) => (a.allDay ? '' : a.startTime || '').localeCompare(b.allDay ? '' : b.startTime || ''));
+    const tasks = tasksOnDate(dateStr);
     const annivs = Object.values(state.anniversaries).filter(a => a.month === d.getMonth() + 1 && a.day === d.getDate());
-    if (evs.length || annivs.length) days.push({ d, dateStr, evs, annivs });
+    if (evs.length || tasks.length || annivs.length) days.push({ d, dateStr, evs, tasks, annivs });
   }
   if (days.length === 0) {
     wrap.innerHTML = '<p class="empty-state">앞으로 60일간 등록된 일정이 없어요. 위 버튼으로 추가해보세요.</p>';
     return;
   }
-  days.forEach(({ d, dateStr, evs, annivs }) => {
+  days.forEach(({ d, dateStr, evs, tasks, annivs }) => {
     const header = document.createElement('div');
     header.className = 'list-date-header';
     header.innerHTML = `<span class="list-date-day">${d.getDate()}</span>
@@ -600,25 +616,8 @@ function renderEventList() {
       card.textContent = `${a.type === 'birthday' ? '🎂' : '🎉'} ${a.title}`;
       wrap.appendChild(card);
     });
-    evs.forEach(ev => {
-      const card = document.createElement('div');
-      card.className = 'event-card';
-      card.style.setProperty('--pin-color', colorForAssignee(ev.assignee));
-      const timeLabel = ev.allDay ? '하루 종일' : [ev.startTime, ev.endTime].filter(Boolean).join(' – ');
-      const assigneeName = ev.assignee === 'all' ? '전체' : (state.members[ev.assignee]?.name || '?');
-      const repeatLabel = repeatLabelFor(ev);
-      card.innerHTML = `
-        <p class="event-title">${escapeHtml(ev.title)}${repeatLabel ? ` <span class="repeat-chip">↻ ${repeatLabel}</span>` : ''}</p>
-        <div class="event-meta">
-          <span>${timeLabel}</span>
-          <span class="event-assignee-badge">
-            <span class="avatar-dot" style="background:${colorForAssignee(ev.assignee)}">${ev.assignee === 'all' ? '👪' : initialsFor(assigneeName)}</span>
-            ${escapeHtml(assigneeName)}
-          </span>
-        </div>`;
-      card.addEventListener('click', () => openEventModal(ev));
-      wrap.appendChild(card);
-    });
+    evs.forEach(ev => wrap.appendChild(buildEventCard(ev)));
+    tasks.forEach(t => wrap.appendChild(buildTaskCard(t)));
   });
 }
 applyCalView(localStorage.getItem('calView') || 'calendar');
@@ -795,7 +794,40 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
   });
 });
 
+function buildTaskCard(t) {
+  const card = document.createElement('div');
+  card.className = 'task-card' + (t.done ? ' done' : '');
+  const assigneeName = t.assignee === 'all' ? '전체' : (state.members[t.assignee]?.name || '?');
+  let repeatLabel = '';
+  if (t.repeat === 'daily') repeatLabel = '매일 반복';
+  else if (t.repeat === 'weekly') {
+    const wds = (t.weekdays && t.weekdays.length) ? [...t.weekdays].sort((a,b) => a - b) : [];
+    repeatLabel = wds.length ? '매주 ' + wds.map(d => WEEKDAYS_KO[d]).join('·') : '매주 반복';
+  }
+  card.innerHTML = `
+    <span class="task-checkbox ${t.done ? 'checked' : ''}">${t.done ? '✓' : ''}</span>
+    <div class="task-body">
+      <p class="task-title">${escapeHtml(t.title)}</p>
+      <div class="task-meta">
+        <span class="event-assignee-badge">
+          <span class="avatar-dot" style="background:${colorForAssignee(t.assignee)}">${t.assignee==='all'?'👪':initialsFor(assigneeName)}</span>
+          ${escapeHtml(assigneeName)}
+        </span>
+        ${t.dueDate ? `<span>~${t.dueDate}</span>` : ''}
+        ${repeatLabel ? `<span>${repeatLabel}</span>` : ''}
+      </div>
+    </div>
+  `;
+  card.querySelector('.task-checkbox').addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleTaskDone(t);
+  });
+  card.querySelector('.task-body').addEventListener('click', () => openTaskModal(t));
+  return card;
+}
+
 function renderTasks() {
+  renderRequestStatus();
   const list = document.getElementById('tasks-list');
   if (!list) return;
   list.innerHTML = '';
@@ -808,37 +840,7 @@ function renderTasks() {
     list.innerHTML = '<p class="empty-state">할일이 없어요. 오른쪽 위 버튼으로 추가해보세요.</p>';
     return;
   }
-  tasks.forEach(t => {
-    const card = document.createElement('div');
-    card.className = 'task-card' + (t.done ? ' done' : '');
-    const assigneeName = t.assignee === 'all' ? '전체' : (state.members[t.assignee]?.name || '?');
-    let repeatLabel = '';
-    if (t.repeat === 'daily') repeatLabel = '매일 반복';
-    else if (t.repeat === 'weekly') {
-      const list = (t.weekdays && t.weekdays.length) ? [...t.weekdays].sort((a,b) => a - b) : [];
-      repeatLabel = list.length ? '매주 ' + list.map(d => WEEKDAYS_KO[d]).join('·') : '매주 반복';
-    }
-    card.innerHTML = `
-      <span class="task-checkbox ${t.done ? 'checked' : ''}">${t.done ? '✓' : ''}</span>
-      <div class="task-body">
-        <p class="task-title">${escapeHtml(t.title)}</p>
-        <div class="task-meta">
-          <span class="event-assignee-badge">
-            <span class="avatar-dot" style="background:${colorForAssignee(t.assignee)}">${t.assignee==='all'?'👪':initialsFor(assigneeName)}</span>
-            ${escapeHtml(assigneeName)}
-          </span>
-          ${t.dueDate ? `<span>~${t.dueDate}</span>` : ''}
-          ${repeatLabel ? `<span>${repeatLabel}</span>` : ''}
-        </div>
-      </div>
-    `;
-    card.querySelector('.task-checkbox').addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleTaskDone(t);
-    });
-    card.querySelector('.task-body').addEventListener('click', () => openTaskModal(t));
-    list.appendChild(card);
-  });
+  tasks.forEach(t => list.appendChild(buildTaskCard(t)));
 }
 
 async function toggleTaskDone(t) {
@@ -924,8 +926,29 @@ document.getElementById('btn-delete-task').addEventListener('click', async () =>
   closeTaskModal();
 });
 
+/* ===================== Request tab: 할일 / 장보기 / 위시 sub-view toggle (per-device) ===================== */
+const GOODS_VIEWS = ['tasks', 'shopping', 'wish'];
+function applyGoodsView(view) {
+  if (!GOODS_VIEWS.includes(view)) view = 'tasks';
+  localStorage.setItem('goodsView', view);
+  GOODS_VIEWS.forEach(v => document.getElementById(`goods-view-${v}`).classList.toggle('hidden', v !== view));
+  document.querySelectorAll('.goods-view-btn').forEach(b => b.classList.toggle('active', b.dataset.goodsView === view));
+}
+document.querySelectorAll('.goods-view-btn, .status-chip').forEach(btn => {
+  btn.addEventListener('click', () => applyGoodsView(btn.dataset.goodsView));
+});
+applyGoodsView(localStorage.getItem('goodsView'));
+
+function renderRequestStatus() {
+  const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+  setCount('status-count-tasks', Object.values(state.tasks).filter(t => !t.done).length);
+  setCount('status-count-shopping', Object.values(state.shopping).filter(i => !i.purchased).length);
+  setCount('status-count-wish', Object.values(state.wishes).filter(w => !w.done).length);
+}
+
 /* ===================== Shopping / household supplies ===================== */
 function renderShopping() {
+  renderRequestStatus();
   const list = document.getElementById('shopping-list');
   if (!list) return;
   list.innerHTML = '';
@@ -982,6 +1005,7 @@ document.querySelectorAll('.wish-filter').forEach(btn => {
 });
 
 function renderWishes() {
+  renderRequestStatus();
   const list = document.getElementById('wish-list');
   if (!list) return;
   list.innerHTML = '';
@@ -1089,7 +1113,8 @@ async function deleteNotice(id) {
 }
 function convertNoticeToTask(id) {
   const n = state.notices[id]; if (!n) return;
-  showTab('tasks');
+  showTab('request');
+  applyGoodsView('tasks');
   openTaskModal(null);
   document.getElementById('task-title').value = (n.text || '').slice(0, 60);
 }
@@ -1288,65 +1313,6 @@ function checkUpcomingAnniversaries() {
   state.notifiedAnniversaryToday = key;
 }
 
-/* ===================== Map & location sharing ===================== */
-function initMapIfNeeded() {
-  if (state.map || !state.familyId) return;
-  state.map = L.map('map').setView([37.5665, 126.9780], 12); // default Seoul; recenters once we have data
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19,
-  }).addTo(state.map);
-  renderMapMembers();
-}
-
-function renderMapMembers() {
-  const listEl = document.getElementById('map-member-list');
-  listEl.innerHTML = '';
-  const sharing = state.members[state.user.uid]?.locationSharing;
-  document.getElementById('map-sharing-status').textContent = sharing ? '위치 공유 켜짐' : '위치 공유 꺼짐';
-  document.getElementById('btn-toggle-location').textContent = sharing ? '위치 공유 끄기' : '위치 공유 켜기';
-
-  const positions = [];
-  Object.entries(state.members).forEach(([uid, m]) => {
-    if (!m.lastLocation) return;
-    const { lat, lng, updatedAt } = m.lastLocation;
-    positions.push([lat, lng]);
-
-    const row = document.createElement('div');
-    row.className = 'map-member-row';
-    row.innerHTML = `
-      <span class="avatar-dot" style="background:${colorFor(m.colorIndex)}">${initialsFor(m.name)}</span>
-      <span>${escapeHtml(m.name)}</span>
-      <span class="updated">${formatRelativeTime(updatedAt)}</span>
-    `;
-    listEl.appendChild(row);
-
-    if (state.map) {
-      if (state.mapMarkers[uid]) {
-        state.mapMarkers[uid].setLatLng([lat, lng]);
-      } else {
-        const icon = L.divIcon({
-          className: '',
-          html: `<div class="family-marker" style="background:${colorFor(m.colorIndex)};width:30px;height:30px;">${initialsFor(m.name)}</div>`,
-          iconSize: [30,30],
-        });
-        state.mapMarkers[uid] = L.marker([lat, lng], { icon }).addTo(state.map).bindPopup(escapeHtml(m.name));
-      }
-    }
-  });
-
-  Object.keys(state.mapMarkers).forEach(uid => {
-    if (!state.members[uid] || !state.members[uid].lastLocation) {
-      state.mapMarkers[uid].remove();
-      delete state.mapMarkers[uid];
-    }
-  });
-
-  if (state.map && positions.length) {
-    state.map.fitBounds(positions, { padding: [30,30], maxZoom: 15 });
-  }
-}
-
 function formatRelativeTime(ts) {
   if (!ts || !ts.toDate) return '';
   const diffMs = Date.now() - ts.toDate().getTime();
@@ -1356,45 +1322,6 @@ function formatRelativeTime(ts) {
   const hrs = Math.floor(mins/60);
   if (hrs < 24) return `${hrs}시간 전`;
   return `${Math.floor(hrs/24)}일 전`;
-}
-
-document.getElementById('btn-toggle-location').addEventListener('click', () => {
-  const sharing = state.members[state.user.uid]?.locationSharing;
-  if (sharing) stopLocationSharing(true);
-  else startLocationSharing();
-});
-
-function startLocationSharing() {
-  if (!navigator.geolocation) { toast('이 브라우저는 위치 공유를 지원하지 않아요'); return; }
-  navigator.geolocation.getCurrentPosition(async () => {
-    await db.collection('families').doc(state.familyId).collection('members').doc(state.user.uid)
-      .update({ locationSharing: true });
-
-    state.watchId = navigator.geolocation.watchPosition(pos => {
-      state.lastPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    }, err => { toast('위치를 가져오지 못했어요'); }, { enableHighAccuracy: true, maximumAge: 15000 });
-
-    writeLocationNow();
-    state.locationWriteInterval = setInterval(writeLocationNow, 25000);
-  }, err => {
-    toast('위치 권한이 필요해요');
-  }, { enableHighAccuracy: true });
-}
-
-async function writeLocationNow() {
-  if (!state.lastPos || !state.familyId) return;
-  await db.collection('families').doc(state.familyId).collection('members').doc(state.user.uid).update({
-    lastLocation: { lat: state.lastPos.lat, lng: state.lastPos.lng, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }
-  });
-}
-
-function stopLocationSharing(persist) {
-  if (state.watchId != null) { navigator.geolocation.clearWatch(state.watchId); state.watchId = null; }
-  if (state.locationWriteInterval) { clearInterval(state.locationWriteInterval); state.locationWriteInterval = null; }
-  if (persist && state.familyId && state.user) {
-    db.collection('families').doc(state.familyId).collection('members').doc(state.user.uid)
-      .update({ locationSharing: false, lastLocation: null }).catch(()=>{});
-  }
 }
 
 /* ===================== PWA service worker ===================== */

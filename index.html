@@ -17,7 +17,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -126,67 +125,75 @@
     </div>
   </section>
 
-  <!-- TASKS TAB -->
-  <section id="tab-tasks" class="tab-panel hidden">
-    <div class="section-header">
-      <h2 class="section-title">집안일 · 할일</h2>
-      <button id="btn-add-task" class="btn btn-pin btn-small">+ 할일 추가</button>
+  <!-- REQUEST TAB (grouped: 할일 · 장보기 · 위시) -->
+  <section id="tab-request" class="tab-panel hidden">
+    <div class="request-status" id="request-status">
+      <button class="status-chip" data-goods-view="tasks">
+        <span class="status-chip-count" id="status-count-tasks">0</span>
+        <span class="status-chip-label">📋 할일</span>
+      </button>
+      <button class="status-chip" data-goods-view="shopping">
+        <span class="status-chip-count" id="status-count-shopping">0</span>
+        <span class="status-chip-label">🛒 장보기</span>
+      </button>
+      <button class="status-chip" data-goods-view="wish">
+        <span class="status-chip-count" id="status-count-wish">0</span>
+        <span class="status-chip-label">🎁 위시</span>
+      </button>
     </div>
-    <div class="filter-row">
-      <button class="filter-btn active" data-filter="all">전체</button>
-      <button class="filter-btn" data-filter="mine">내 할일</button>
-      <button class="filter-btn" data-filter="done">완료됨</button>
-    </div>
-    <div id="tasks-list" class="events-list"></div>
-  </section>
 
-  <!-- SHOPPING TAB -->
-  <section id="tab-shopping" class="tab-panel hidden">
-    <div class="section-header">
-      <h2 class="section-title">생필품 구매희망</h2>
+    <div class="view-toggle">
+      <button class="goods-view-btn active" data-goods-view="tasks">📋 할일</button>
+      <button class="goods-view-btn" data-goods-view="shopping">🛒 장보기</button>
+      <button class="goods-view-btn" data-goods-view="wish">🎁 위시</button>
     </div>
-    <form id="form-shopping-add" class="shopping-add-row">
-      <input type="text" id="shopping-item-name" placeholder="예: 화장지, 우유" required>
-      <button type="submit" class="btn btn-pin btn-small">추가</button>
-    </form>
-    <div id="shopping-list" class="events-list"></div>
-  </section>
 
-  <!-- WISHLIST TAB -->
-  <section id="tab-wish" class="tab-panel hidden">
-    <div class="section-header">
-      <h2 class="section-title">위시리스트</h2>
+    <div id="goods-view-tasks">
+      <div class="section-header">
+        <h2 class="section-title">집안일 · 할일</h2>
+        <button id="btn-add-task" class="btn btn-pin btn-small">+ 할일 추가</button>
+      </div>
+      <div class="filter-row">
+        <button class="filter-btn active" data-filter="all">전체</button>
+        <button class="filter-btn" data-filter="mine">내 할일</button>
+        <button class="filter-btn" data-filter="done">완료됨</button>
+      </div>
+      <div id="tasks-list" class="events-list"></div>
     </div>
-    <p class="wish-hint">먹고 싶은 음식이나 받고 싶은 선물을 적어두면 가족이 함께 봐요 💕</p>
-    <form id="form-wish-add" class="wish-add">
-      <input type="text" id="wish-title" placeholder="예: 마라탕, 무선 이어폰" required>
-      <div class="wish-add-row2">
-        <select id="wish-category">
-          <option value="food">🍰 먹고 싶은 것</option>
-          <option value="gift">🎁 받고 싶은 선물</option>
-        </select>
+
+    <div id="goods-view-shopping" class="hidden">
+      <div class="section-header">
+        <h2 class="section-title">생필품 구매희망</h2>
+      </div>
+      <form id="form-shopping-add" class="shopping-add-row">
+        <input type="text" id="shopping-item-name" placeholder="예: 화장지, 우유" required>
         <button type="submit" class="btn btn-pin btn-small">추가</button>
-      </div>
-    </form>
-    <div class="filter-row">
-      <button class="wish-filter active" data-wfilter="all">전체</button>
-      <button class="wish-filter" data-wfilter="food">🍰 음식</button>
-      <button class="wish-filter" data-wfilter="gift">🎁 선물</button>
+      </form>
+      <div id="shopping-list" class="events-list"></div>
     </div>
-    <div id="wish-list" class="events-list"></div>
-  </section>
 
-  <!-- MAP TAB -->
-  <section id="tab-map" class="tab-panel hidden">
-    <div class="map-controls">
-      <div>
-        <p class="map-title">가족 위치</p>
-        <p class="map-sub" id="map-sharing-status">위치 공유 꺼짐</p>
+    <div id="goods-view-wish" class="hidden">
+      <div class="section-header">
+        <h2 class="section-title">위시리스트</h2>
       </div>
-      <button id="btn-toggle-location" class="btn btn-pin">위치 공유 켜기</button>
+      <p class="wish-hint">먹고 싶은 음식이나 받고 싶은 선물을 적어두면 가족이 함께 봐요 💕</p>
+      <form id="form-wish-add" class="wish-add">
+        <input type="text" id="wish-title" placeholder="예: 마라탕, 무선 이어폰" required>
+        <div class="wish-add-row2">
+          <select id="wish-category">
+            <option value="food">🍰 먹고 싶은 것</option>
+            <option value="gift">🎁 받고 싶은 선물</option>
+          </select>
+          <button type="submit" class="btn btn-pin btn-small">추가</button>
+        </div>
+      </form>
+      <div class="filter-row">
+        <button class="wish-filter active" data-wfilter="all">전체</button>
+        <button class="wish-filter" data-wfilter="food">🍰 음식</button>
+        <button class="wish-filter" data-wfilter="gift">🎁 선물</button>
+      </div>
+      <div id="wish-list" class="events-list"></div>
     </div>
-    <div id="map" class="map-container"></div>
-    <div id="map-member-list" class="map-member-list"></div>
   </section>
 
   <!-- FAMILY TAB -->
@@ -219,17 +226,8 @@
     <button class="nav-btn" data-tab="calendar">
       <span class="nav-icon">📅</span><span>캘린더</span>
     </button>
-    <button class="nav-btn" data-tab="tasks">
-      <span class="nav-icon">📋</span><span>할일</span>
-    </button>
-    <button class="nav-btn" data-tab="shopping">
-      <span class="nav-icon">🛒</span><span>장보기</span>
-    </button>
-    <button class="nav-btn" data-tab="wish">
-      <span class="nav-icon">🎁</span><span>위시</span>
-    </button>
-    <button class="nav-btn" data-tab="map">
-      <span class="nav-icon">📍</span><span>지도</span>
+    <button class="nav-btn" data-tab="request">
+      <span class="nav-icon">🙋</span><span>요청</span>
     </button>
     <button class="nav-btn" data-tab="family">
       <span class="nav-icon">👪</span><span>가족</span>
@@ -430,8 +428,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script src="firebase-config.js"></script>
 <script src="app.js"></script>
