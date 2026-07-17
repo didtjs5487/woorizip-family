@@ -264,6 +264,8 @@ function enterFamily(familyId) {
       state.tasks = {};
       snap.forEach(doc => { state.tasks[doc.id] = { id: doc.id, ...doc.data() }; });
       renderTasks();
+      renderCalendar();
+      renderDayPanel();
     });
 
   state.unsubShopping = db.collection('families').doc(familyId).collection('shopping')
@@ -423,6 +425,21 @@ function eventOccursOn(ev, dateStr) {
 function eventsOnDate(dateStr) {
   return Object.values(state.events).filter(ev => eventOccursOn(ev, dateStr));
 }
+function taskOccursOn(t, dateStr) {
+  if (!t.dueDate) return false; // undated tasks only show in the 할일 tab
+  const repeat = t.repeat || 'none';
+  if (repeat === 'none') return t.dueDate === dateStr;
+  if (dateStr < t.dueDate) return false;
+  if (repeat === 'daily') return true;
+  if (repeat === 'weekly') {
+    const list = (t.weekdays && t.weekdays.length) ? t.weekdays : [weekdayOf(t.dueDate)];
+    return list.includes(weekdayOf(dateStr));
+  }
+  return false;
+}
+function tasksOnDate(dateStr) {
+  return Object.values(state.tasks).filter(t => taskOccursOn(t, dateStr));
+}
 function repeatLabelFor(ev) {
   const repeat = ev.repeat || 'none';
   if (repeat === 'daily') return '매일';
@@ -469,11 +486,14 @@ function renderCalendar() {
 
     const dots = document.createElement('div');
     dots.className = 'cal-day-dots';
-    const dayEvents = eventsOnDate(dateStr).slice(0, 4);
-    dayEvents.forEach(ev => {
+    const dayDots = [
+      ...eventsOnDate(dateStr).map(ev => ({ assignee: ev.assignee, isTask: false })),
+      ...tasksOnDate(dateStr).map(t => ({ assignee: t.assignee, isTask: true })),
+    ].slice(0, 4);
+    dayDots.forEach(({ assignee, isTask }) => {
       const dot = document.createElement('span');
-      dot.className = 'cal-dot';
-      dot.style.background = colorForAssignee(ev.assignee);
+      dot.className = 'cal-dot' + (isTask ? ' cal-dot-task' : '');
+      dot.style.background = colorForAssignee(assignee);
       dots.appendChild(dot);
     });
     cell.appendChild(dots);
@@ -500,6 +520,27 @@ function colorForAssignee(assignee) {
   return m ? colorFor(m.colorIndex) : '#B9AE94';
 }
 
+function buildEventCard(ev) {
+  const card = document.createElement('div');
+  card.className = 'event-card';
+  card.style.setProperty('--pin-color', colorForAssignee(ev.assignee));
+  const timeLabel = ev.allDay ? '하루 종일' : [ev.startTime, ev.endTime].filter(Boolean).join(' – ');
+  const assigneeName = ev.assignee === 'all' ? '전체' : (state.members[ev.assignee]?.name || '?');
+  const repeatLabel = repeatLabelFor(ev);
+  card.innerHTML = `
+    <p class="event-title">${escapeHtml(ev.title)}${repeatLabel ? ` <span class="repeat-chip">↻ ${repeatLabel}</span>` : ''}</p>
+    <div class="event-meta">
+      <span>${timeLabel}</span>
+      <span class="event-assignee-badge">
+        <span class="avatar-dot" style="background:${colorForAssignee(ev.assignee)}">${ev.assignee==='all'?'👪':initialsFor(assigneeName)}</span>
+        ${escapeHtml(assigneeName)}
+      </span>
+    </div>
+  `;
+  card.addEventListener('click', () => openEventModal(ev));
+  return card;
+}
+
 function renderDayPanel() {
   const [y,mo,da] = state.selectedDate.split('-').map(Number);
   const d = new Date(y, mo-1, da);
@@ -520,31 +561,14 @@ function renderDayPanel() {
 
   const dayEvents = eventsOnDate(state.selectedDate)
     .sort((a,b) => (a.allDay ? '' : a.startTime||'').localeCompare(b.allDay ? '' : b.startTime||''));
+  const dayTasks = tasksOnDate(state.selectedDate);
 
-  if (dayEvents.length === 0) {
+  if (dayEvents.length === 0 && dayTasks.length === 0) {
     if (dayAnniversaries.length === 0) list.innerHTML += '<p class="empty-state">이 날은 일정이 없어요.</p>';
     return;
   }
-  dayEvents.forEach(ev => {
-    const card = document.createElement('div');
-    card.className = 'event-card';
-    card.style.setProperty('--pin-color', colorForAssignee(ev.assignee));
-    const timeLabel = ev.allDay ? '하루 종일' : [ev.startTime, ev.endTime].filter(Boolean).join(' – ');
-    const assigneeName = ev.assignee === 'all' ? '전체' : (state.members[ev.assignee]?.name || '?');
-    const repeatLabel = repeatLabelFor(ev);
-    card.innerHTML = `
-      <p class="event-title">${escapeHtml(ev.title)}${repeatLabel ? ` <span class="repeat-chip">↻ ${repeatLabel}</span>` : ''}</p>
-      <div class="event-meta">
-        <span>${timeLabel}</span>
-        <span class="event-assignee-badge">
-          <span class="avatar-dot" style="background:${colorForAssignee(ev.assignee)}">${ev.assignee==='all'?'👪':initialsFor(assigneeName)}</span>
-          ${escapeHtml(assigneeName)}
-        </span>
-      </div>
-    `;
-    card.addEventListener('click', () => openEventModal(ev));
-    list.appendChild(card);
-  });
+  dayEvents.forEach(ev => list.appendChild(buildEventCard(ev)));
+  dayTasks.forEach(t => list.appendChild(buildTaskCard(t)));
 }
 
 /* ===================== Calendar / List view toggle (per-device) ===================== */
@@ -572,14 +596,15 @@ function renderEventList() {
     const dateStr = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
     const evs = eventsOnDate(dateStr)
       .sort((a, b) => (a.allDay ? '' : a.startTime || '').localeCompare(b.allDay ? '' : b.startTime || ''));
+    const tasks = tasksOnDate(dateStr);
     const annivs = Object.values(state.anniversaries).filter(a => a.month === d.getMonth() + 1 && a.day === d.getDate());
-    if (evs.length || annivs.length) days.push({ d, dateStr, evs, annivs });
+    if (evs.length || tasks.length || annivs.length) days.push({ d, dateStr, evs, tasks, annivs });
   }
   if (days.length === 0) {
     wrap.innerHTML = '<p class="empty-state">앞으로 60일간 등록된 일정이 없어요. 위 버튼으로 추가해보세요.</p>';
     return;
   }
-  days.forEach(({ d, dateStr, evs, annivs }) => {
+  days.forEach(({ d, dateStr, evs, tasks, annivs }) => {
     const header = document.createElement('div');
     header.className = 'list-date-header';
     header.innerHTML = `<span class="list-date-day">${d.getDate()}</span>
@@ -591,25 +616,8 @@ function renderEventList() {
       card.textContent = `${a.type === 'birthday' ? '🎂' : '🎉'} ${a.title}`;
       wrap.appendChild(card);
     });
-    evs.forEach(ev => {
-      const card = document.createElement('div');
-      card.className = 'event-card';
-      card.style.setProperty('--pin-color', colorForAssignee(ev.assignee));
-      const timeLabel = ev.allDay ? '하루 종일' : [ev.startTime, ev.endTime].filter(Boolean).join(' – ');
-      const assigneeName = ev.assignee === 'all' ? '전체' : (state.members[ev.assignee]?.name || '?');
-      const repeatLabel = repeatLabelFor(ev);
-      card.innerHTML = `
-        <p class="event-title">${escapeHtml(ev.title)}${repeatLabel ? ` <span class="repeat-chip">↻ ${repeatLabel}</span>` : ''}</p>
-        <div class="event-meta">
-          <span>${timeLabel}</span>
-          <span class="event-assignee-badge">
-            <span class="avatar-dot" style="background:${colorForAssignee(ev.assignee)}">${ev.assignee === 'all' ? '👪' : initialsFor(assigneeName)}</span>
-            ${escapeHtml(assigneeName)}
-          </span>
-        </div>`;
-      card.addEventListener('click', () => openEventModal(ev));
-      wrap.appendChild(card);
-    });
+    evs.forEach(ev => wrap.appendChild(buildEventCard(ev)));
+    tasks.forEach(t => wrap.appendChild(buildTaskCard(t)));
   });
 }
 applyCalView(localStorage.getItem('calView') || 'calendar');
@@ -786,6 +794,38 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
   });
 });
 
+function buildTaskCard(t) {
+  const card = document.createElement('div');
+  card.className = 'task-card' + (t.done ? ' done' : '');
+  const assigneeName = t.assignee === 'all' ? '전체' : (state.members[t.assignee]?.name || '?');
+  let repeatLabel = '';
+  if (t.repeat === 'daily') repeatLabel = '매일 반복';
+  else if (t.repeat === 'weekly') {
+    const wds = (t.weekdays && t.weekdays.length) ? [...t.weekdays].sort((a,b) => a - b) : [];
+    repeatLabel = wds.length ? '매주 ' + wds.map(d => WEEKDAYS_KO[d]).join('·') : '매주 반복';
+  }
+  card.innerHTML = `
+    <span class="task-checkbox ${t.done ? 'checked' : ''}">${t.done ? '✓' : ''}</span>
+    <div class="task-body">
+      <p class="task-title">${escapeHtml(t.title)}</p>
+      <div class="task-meta">
+        <span class="event-assignee-badge">
+          <span class="avatar-dot" style="background:${colorForAssignee(t.assignee)}">${t.assignee==='all'?'👪':initialsFor(assigneeName)}</span>
+          ${escapeHtml(assigneeName)}
+        </span>
+        ${t.dueDate ? `<span>~${t.dueDate}</span>` : ''}
+        ${repeatLabel ? `<span>${repeatLabel}</span>` : ''}
+      </div>
+    </div>
+  `;
+  card.querySelector('.task-checkbox').addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleTaskDone(t);
+  });
+  card.querySelector('.task-body').addEventListener('click', () => openTaskModal(t));
+  return card;
+}
+
 function renderTasks() {
   const list = document.getElementById('tasks-list');
   if (!list) return;
@@ -799,37 +839,7 @@ function renderTasks() {
     list.innerHTML = '<p class="empty-state">할일이 없어요. 오른쪽 위 버튼으로 추가해보세요.</p>';
     return;
   }
-  tasks.forEach(t => {
-    const card = document.createElement('div');
-    card.className = 'task-card' + (t.done ? ' done' : '');
-    const assigneeName = t.assignee === 'all' ? '전체' : (state.members[t.assignee]?.name || '?');
-    let repeatLabel = '';
-    if (t.repeat === 'daily') repeatLabel = '매일 반복';
-    else if (t.repeat === 'weekly') {
-      const list = (t.weekdays && t.weekdays.length) ? [...t.weekdays].sort((a,b) => a - b) : [];
-      repeatLabel = list.length ? '매주 ' + list.map(d => WEEKDAYS_KO[d]).join('·') : '매주 반복';
-    }
-    card.innerHTML = `
-      <span class="task-checkbox ${t.done ? 'checked' : ''}">${t.done ? '✓' : ''}</span>
-      <div class="task-body">
-        <p class="task-title">${escapeHtml(t.title)}</p>
-        <div class="task-meta">
-          <span class="event-assignee-badge">
-            <span class="avatar-dot" style="background:${colorForAssignee(t.assignee)}">${t.assignee==='all'?'👪':initialsFor(assigneeName)}</span>
-            ${escapeHtml(assigneeName)}
-          </span>
-          ${t.dueDate ? `<span>~${t.dueDate}</span>` : ''}
-          ${repeatLabel ? `<span>${repeatLabel}</span>` : ''}
-        </div>
-      </div>
-    `;
-    card.querySelector('.task-checkbox').addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleTaskDone(t);
-    });
-    card.querySelector('.task-body').addEventListener('click', () => openTaskModal(t));
-    list.appendChild(card);
-  });
+  tasks.forEach(t => list.appendChild(buildTaskCard(t)));
 }
 
 async function toggleTaskDone(t) {
