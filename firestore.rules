@@ -17,7 +17,11 @@ service cloud.firestore {
       allow update, delete: if signedIn() && isMember(familyId);
 
       match /members/{memberId} {
-        allow read: if signedIn() && isMember(familyId);
+        // Reading the member list (not just isMember families) has to be allowed to
+        // any signed-in user: a brand-new joiner isn't a member yet when the entry
+        // flow reads the list to check for an existing membership / pick a color.
+        // The shared family password is the real gate here, same as /families read.
+        allow read: if signedIn();
         allow create: if signedIn() && request.auth.uid == memberId;
         allow update: if signedIn() && request.auth.uid == memberId;
         allow delete: if signedIn() && request.auth.uid == memberId;
