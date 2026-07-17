@@ -35,7 +35,7 @@ const state = {
   userDoc: null,       // { name, email, familyId }
   familyId: null,
   familyDoc: null,      // { name, inviteCode }
-  members: {},          // uid -> { name, colorIndex, locationSharing, lastLocation }
+  members: {},          // uid -> { name, colorIndex }
   events: {},            // eventId -> event data
   tasks: {},             // taskId -> task data
   shopping: {},          // itemId -> shopping item data
@@ -60,11 +60,6 @@ const state = {
   unsubAnniversaries: null,
   eventsLoadedOnce: false,
   notifiedAnniversaryToday: null,
-  watchId: null,
-  lastPos: null,
-  map: null,
-  mapMarkers: {},
-  locationWriteInterval: null,
 };
 
 /* ===================== Screen / tab helpers ===================== */
@@ -76,7 +71,6 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
   document.getElementById(`tab-${name}`).classList.remove('hidden');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  if (name === 'map') setTimeout(initMapIfNeeded, 50);
   if (name === 'notice') markNoticesRead();
 }
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -124,7 +118,6 @@ document.getElementById('form-entry').addEventListener('submit', async (e) => {
       await famDoc.ref.collection('members').doc(uid).set({
         name,
         colorIndex: alreadyMember ? (membersSnap.docs.find(d => d.id === uid).data().colorIndex ?? 0) : membersSnap.size,
-        locationSharing: false, lastLocation: null
       }, { merge: true });
       await db.collection('users').doc(uid).set({ familyId: famDoc.id }, { merge: true });
       // the user-doc onSnapshot listener will drive enterFamily()
@@ -159,7 +152,7 @@ document.getElementById('btn-entry-create').addEventListener('click', async () =
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await familyRef.collection('members').doc(uid).set({
-      name: pendingEntry.name, colorIndex: 0, locationSharing: false, lastLocation: null
+      name: pendingEntry.name, colorIndex: 0
     });
     await db.collection('users').doc(uid).set({ name: pendingEntry.name, familyId: familyRef.id }, { merge: true });
     pendingEntry = null;
@@ -220,7 +213,6 @@ function teardownFamilyListeners() {
   if (state.unsubWishes) { state.unsubWishes(); state.unsubWishes = null; }
   if (state.unsubNotices) { state.unsubNotices(); state.unsubNotices = null; }
   if (state.unsubAnniversaries) { state.unsubAnniversaries(); state.unsubAnniversaries = null; }
-  stopLocationSharing(false);
   state.eventsLoadedOnce = false;
 }
 
@@ -240,7 +232,6 @@ function enterFamily(familyId) {
       renderAssigneeOptions();
       renderCalendar();
       renderDayPanel();
-      renderMapMembers();
     });
 
   state.unsubEvents = db.collection('families').doc(familyId).collection('events')
@@ -924,6 +915,18 @@ document.getElementById('btn-delete-task').addEventListener('click', async () =>
   closeTaskModal();
 });
 
+/* ===================== Shopping / Wish sub-view toggle (per-device) ===================== */
+function applyGoodsView(view) {
+  localStorage.setItem('goodsView', view);
+  document.getElementById('goods-view-shopping').classList.toggle('hidden', view !== 'shopping');
+  document.getElementById('goods-view-wish').classList.toggle('hidden', view !== 'wish');
+  document.querySelectorAll('.goods-view-btn').forEach(b => b.classList.toggle('active', b.dataset.goodsView === view));
+}
+document.querySelectorAll('.goods-view-btn').forEach(btn => {
+  btn.addEventListener('click', () => applyGoodsView(btn.dataset.goodsView));
+});
+applyGoodsView(localStorage.getItem('goodsView') === 'wish' ? 'wish' : 'shopping');
+
 /* ===================== Shopping / household supplies ===================== */
 function renderShopping() {
   const list = document.getElementById('shopping-list');
@@ -1288,65 +1291,6 @@ function checkUpcomingAnniversaries() {
   state.notifiedAnniversaryToday = key;
 }
 
-/* ===================== Map & location sharing ===================== */
-function initMapIfNeeded() {
-  if (state.map || !state.familyId) return;
-  state.map = L.map('map').setView([37.5665, 126.9780], 12); // default Seoul; recenters once we have data
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19,
-  }).addTo(state.map);
-  renderMapMembers();
-}
-
-function renderMapMembers() {
-  const listEl = document.getElementById('map-member-list');
-  listEl.innerHTML = '';
-  const sharing = state.members[state.user.uid]?.locationSharing;
-  document.getElementById('map-sharing-status').textContent = sharing ? '위치 공유 켜짐' : '위치 공유 꺼짐';
-  document.getElementById('btn-toggle-location').textContent = sharing ? '위치 공유 끄기' : '위치 공유 켜기';
-
-  const positions = [];
-  Object.entries(state.members).forEach(([uid, m]) => {
-    if (!m.lastLocation) return;
-    const { lat, lng, updatedAt } = m.lastLocation;
-    positions.push([lat, lng]);
-
-    const row = document.createElement('div');
-    row.className = 'map-member-row';
-    row.innerHTML = `
-      <span class="avatar-dot" style="background:${colorFor(m.colorIndex)}">${initialsFor(m.name)}</span>
-      <span>${escapeHtml(m.name)}</span>
-      <span class="updated">${formatRelativeTime(updatedAt)}</span>
-    `;
-    listEl.appendChild(row);
-
-    if (state.map) {
-      if (state.mapMarkers[uid]) {
-        state.mapMarkers[uid].setLatLng([lat, lng]);
-      } else {
-        const icon = L.divIcon({
-          className: '',
-          html: `<div class="family-marker" style="background:${colorFor(m.colorIndex)};width:30px;height:30px;">${initialsFor(m.name)}</div>`,
-          iconSize: [30,30],
-        });
-        state.mapMarkers[uid] = L.marker([lat, lng], { icon }).addTo(state.map).bindPopup(escapeHtml(m.name));
-      }
-    }
-  });
-
-  Object.keys(state.mapMarkers).forEach(uid => {
-    if (!state.members[uid] || !state.members[uid].lastLocation) {
-      state.mapMarkers[uid].remove();
-      delete state.mapMarkers[uid];
-    }
-  });
-
-  if (state.map && positions.length) {
-    state.map.fitBounds(positions, { padding: [30,30], maxZoom: 15 });
-  }
-}
-
 function formatRelativeTime(ts) {
   if (!ts || !ts.toDate) return '';
   const diffMs = Date.now() - ts.toDate().getTime();
@@ -1356,45 +1300,6 @@ function formatRelativeTime(ts) {
   const hrs = Math.floor(mins/60);
   if (hrs < 24) return `${hrs}시간 전`;
   return `${Math.floor(hrs/24)}일 전`;
-}
-
-document.getElementById('btn-toggle-location').addEventListener('click', () => {
-  const sharing = state.members[state.user.uid]?.locationSharing;
-  if (sharing) stopLocationSharing(true);
-  else startLocationSharing();
-});
-
-function startLocationSharing() {
-  if (!navigator.geolocation) { toast('이 브라우저는 위치 공유를 지원하지 않아요'); return; }
-  navigator.geolocation.getCurrentPosition(async () => {
-    await db.collection('families').doc(state.familyId).collection('members').doc(state.user.uid)
-      .update({ locationSharing: true });
-
-    state.watchId = navigator.geolocation.watchPosition(pos => {
-      state.lastPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    }, err => { toast('위치를 가져오지 못했어요'); }, { enableHighAccuracy: true, maximumAge: 15000 });
-
-    writeLocationNow();
-    state.locationWriteInterval = setInterval(writeLocationNow, 25000);
-  }, err => {
-    toast('위치 권한이 필요해요');
-  }, { enableHighAccuracy: true });
-}
-
-async function writeLocationNow() {
-  if (!state.lastPos || !state.familyId) return;
-  await db.collection('families').doc(state.familyId).collection('members').doc(state.user.uid).update({
-    lastLocation: { lat: state.lastPos.lat, lng: state.lastPos.lng, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }
-  });
-}
-
-function stopLocationSharing(persist) {
-  if (state.watchId != null) { navigator.geolocation.clearWatch(state.watchId); state.watchId = null; }
-  if (state.locationWriteInterval) { clearInterval(state.locationWriteInterval); state.locationWriteInterval = null; }
-  if (persist && state.familyId && state.user) {
-    db.collection('families').doc(state.familyId).collection('members').doc(state.user.uid)
-      .update({ locationSharing: false, lastLocation: null }).catch(()=>{});
-  }
 }
 
 /* ===================== PWA service worker ===================== */
