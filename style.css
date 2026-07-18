@@ -228,7 +228,7 @@ button, input, select, textarea { font-family: inherit; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 14px; }
 .section-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; margin: 0; }
 
-.filter-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.filter-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .filter-btn {
   border: 1px solid var(--border); background: var(--card); color: var(--ink-soft);
   border-radius: 20px; padding: 6px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
@@ -264,6 +264,8 @@ button, input, select, textarea { font-family: inherit; }
 .shopping-item.purchased .shopping-name { text-decoration: line-through; }
 .shopping-name { flex: 1; font-weight: 600; font-size: 14.5px; }
 .shopping-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); }
+.shopping-delete-btn { background: none; border: none; color: var(--ink-soft); font-size: 15px; line-height: 1; cursor: pointer; padding: 4px; }
+.shopping-delete-btn:active { color: var(--danger); }
 
 /* ===== Wishlist ===== */
 .wish-hint { color: var(--ink-soft); font-size: 12.5px; margin: 0 0 12px; }
@@ -277,6 +279,11 @@ button, input, select, textarea { font-family: inherit; }
   flex: 1; border: 1px solid var(--border); background: var(--paper-dim);
   border-radius: var(--radius-sm); padding: 11px 12px; font-size: 14.5px;
 }
+.wish-group-header {
+  display: flex; align-items: center; gap: 8px; margin: 18px 0 8px; font-weight: 700; font-size: 13.5px; color: var(--ink-soft);
+}
+.wish-group-header:first-child { margin-top: 0; }
+.wish-group-header .avatar-dot { width: 22px; height: 22px; font-size: 10px; }
 .wish-item {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md);
   padding: 12px 14px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-pin);
@@ -286,9 +293,10 @@ button, input, select, textarea { font-family: inherit; }
 .wish-emoji { font-size: 22px; }
 .wish-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .wish-name { font-weight: 600; font-size: 14.5px; }
-.wish-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); }
 .wish-heart { background: none; border: none; font-size: 20px; cursor: pointer; padding: 2px; line-height: 1; }
 .wish-heart:active { transform: scale(0.9); }
+.wish-delete-btn { background: none; border: none; color: var(--ink-soft); font-size: 15px; line-height: 1; cursor: pointer; padding: 4px; }
+.wish-delete-btn:active { color: var(--danger); }
 .wish-filter {
   border: 1px solid var(--border); background: var(--paper-dim); color: var(--ink-soft);
   border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -387,20 +395,21 @@ button, input, select, textarea { font-family: inherit; }
 /* ===== Bottom nav ===== */
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
-  display: flex;
+  display: flex; justify-content: center;
   background: rgba(255,255,255,0.82);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
-  padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+  padding: 10px 6px calc(10px + env(safe-area-inset-bottom));
   max-width: 640px; margin: 0 auto;
   box-shadow: 0 -4px 16px rgba(140,90,120,.08);
+  gap: 6px;
 }
 .nav-btn {
-  flex: 1; background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 6px 1px; color: var(--ink-soft); font-size: 9.5px; cursor: pointer; border-radius: var(--radius-sm);
+  flex: 1; max-width: 120px; background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 4px; color: var(--ink-soft); font-size: 10.5px; font-weight: 600; cursor: pointer; border-radius: var(--radius-md);
 }
-.nav-btn.active { color: var(--ink); font-weight: 700; }
-.nav-icon { font-size: 18px; }
+.nav-btn.active { color: var(--ink); font-weight: 700; background: var(--paper-dim); }
+.nav-icon { font-size: 23px; }
 
 /* ===== Modal ===== */
 .modal-overlay {

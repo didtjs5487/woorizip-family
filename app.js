@@ -986,12 +986,13 @@ function renderShopping() {
       <span class="task-checkbox ${item.purchased ? 'checked' : ''}">${item.purchased ? '✓' : ''}</span>
       <span class="shopping-name">${escapeHtml(item.name)}</span>
       <span class="shopping-meta">${escapeHtml(requesterName)}님 요청</span>
+      ${item.purchased ? '<button class="shopping-delete-btn" title="삭제" aria-label="삭제">✕</button>' : ''}
     `;
     row.querySelector('.task-checkbox').addEventListener('click', () => toggleShoppingPurchased(item));
-    row.addEventListener('dblclick', () => {
-      if (confirm('이 항목을 삭제할까요?')) {
-        db.collection('families').doc(state.familyId).collection('shopping').doc(item.id).delete();
-      }
+    const delBtn = row.querySelector('.shopping-delete-btn');
+    if (delBtn) delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      db.collection('families').doc(state.familyId).collection('shopping').doc(item.id).delete();
     });
     list.appendChild(row);
   });
@@ -1032,35 +1033,59 @@ function renderWishes() {
   list.innerHTML = '';
   let items = Object.values(state.wishes);
   if (state.wishFilter !== 'all') items = items.filter(w => (w.category || 'gift') === state.wishFilter);
-  items.sort((a,b) => (a.done === b.done) ? 0 : (a.done ? 1 : -1));
 
   if (items.length === 0) {
     list.innerHTML = '<p class="empty-state">아직 위시가 없어요. 먹고 싶은 것·받고 싶은 선물을 적어보세요 🎁</p>';
     return;
   }
+
+  // group by requester so each member's wishes are easy to browse separately
+  const byMember = new Map();
   items.forEach(w => {
-    const emoji = (w.category === 'food') ? '🍰' : '🎁';
-    const who = state.members[w.requestedBy]?.name || '?';
-    const row = document.createElement('div');
-    row.className = 'wish-item' + (w.done ? ' done' : '');
-    row.innerHTML = `
-      <span class="wish-emoji">${emoji}</span>
-      <div class="wish-body">
-        <span class="wish-name">${escapeHtml(w.title)}</span>
-        <span class="wish-meta">${escapeHtml(who)}</span>
-      </div>
-      <button class="wish-heart ${w.done ? 'on' : ''}" title="이뤄졌어요">${w.done ? '💖' : '🤍'}</button>
+    const key = w.requestedBy || '?';
+    if (!byMember.has(key)) byMember.set(key, []);
+    byMember.get(key).push(w);
+  });
+  const memberOrder = [...Object.keys(state.members), ...[...byMember.keys()].filter(k => !state.members[k])];
+
+  memberOrder.forEach(memberId => {
+    const wishItems = byMember.get(memberId);
+    if (!wishItems || wishItems.length === 0) return;
+    const m = state.members[memberId];
+
+    const header = document.createElement('div');
+    header.className = 'wish-group-header';
+    header.innerHTML = `
+      <span class="avatar-dot" style="background:${m ? colorFor(m.colorIndex) : '#B9AE94'}">${initialsFor(m?.name || '?')}</span>
+      <span>${escapeHtml(m?.name || '알 수 없음')}</span>
     `;
-    row.querySelector('.wish-heart').addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleWishDone(w);
+    list.appendChild(header);
+
+    wishItems.sort((a,b) => (a.done === b.done) ? 0 : (a.done ? 1 : -1));
+    wishItems.forEach(w => {
+      const emoji = w.category === 'food' ? '🍰' : w.category === 'place' ? '🧳' : '🎁';
+      const row = document.createElement('div');
+      row.className = 'wish-item' + (w.done ? ' done' : '');
+      row.innerHTML = `
+        <span class="wish-emoji">${emoji}</span>
+        <div class="wish-body">
+          <span class="wish-name">${escapeHtml(w.title)}</span>
+        </div>
+        <button class="wish-heart ${w.done ? 'on' : ''}" title="이뤄졌어요">${w.done ? '💖' : '🤍'}</button>
+        <button class="wish-delete-btn" title="삭제" aria-label="삭제">✕</button>
+      `;
+      row.querySelector('.wish-heart').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleWishDone(w);
+      });
+      row.querySelector('.wish-delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm('이 위시를 삭제할까요?')) {
+          db.collection('families').doc(state.familyId).collection('wishes').doc(w.id).delete();
+        }
+      });
+      list.appendChild(row);
     });
-    row.addEventListener('dblclick', () => {
-      if (confirm('이 위시를 삭제할까요?')) {
-        db.collection('families').doc(state.familyId).collection('wishes').doc(w.id).delete();
-      }
-    });
-    list.appendChild(row);
   });
 }
 
