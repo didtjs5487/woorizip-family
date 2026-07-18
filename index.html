@@ -176,13 +176,14 @@
       <div class="section-header">
         <h2 class="section-title">위시리스트</h2>
       </div>
-      <p class="wish-hint">먹고 싶은 음식이나 받고 싶은 선물을 적어두면 가족이 함께 봐요 💕</p>
+      <p class="wish-hint">먹고 싶은 음식, 받고 싶은 선물, 가보고 싶은 곳을 적어두면 가족이 함께 봐요 💕</p>
       <form id="form-wish-add" class="wish-add">
-        <input type="text" id="wish-title" placeholder="예: 마라탕, 무선 이어폰" required>
+        <input type="text" id="wish-title" placeholder="예: 마라탕, 무선 이어폰, 제주도" required>
         <div class="wish-add-row2">
           <select id="wish-category">
             <option value="food">🍰 먹고 싶은 것</option>
             <option value="gift">🎁 받고 싶은 선물</option>
+            <option value="place">🧳 가보고 싶은 곳</option>
           </select>
           <button type="submit" class="btn btn-pin btn-small">추가</button>
         </div>
@@ -191,6 +192,7 @@
         <button class="wish-filter active" data-wfilter="all">전체</button>
         <button class="wish-filter" data-wfilter="food">🍰 음식</button>
         <button class="wish-filter" data-wfilter="gift">🎁 선물</button>
+        <button class="wish-filter" data-wfilter="place">🧳 장소</button>
       </div>
       <div id="wish-list" class="events-list"></div>
     </div>
