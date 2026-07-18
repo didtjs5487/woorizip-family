@@ -249,7 +249,35 @@
       <input type="text" id="event-title" placeholder="예: 민준이 병원 진료" required>
 
       <label class="field-label">날짜</label>
-      <input type="date" id="event-date" required>
+      <div class="view-toggle">
+        <button type="button" class="date-mode-btn active" data-date-mode="single">하루</button>
+        <button type="button" class="date-mode-btn" data-date-mode="range">기간</button>
+        <button type="button" class="date-mode-btn" data-date-mode="multi">여러 날짜</button>
+      </div>
+
+      <div id="date-mode-single">
+        <input type="date" id="event-date" required>
+      </div>
+
+      <div id="date-mode-range" class="time-row hidden">
+        <div>
+          <label class="field-label">시작일</label>
+          <input type="date" id="event-date-start">
+        </div>
+        <div>
+          <label class="field-label">종료일</label>
+          <input type="date" id="event-date-end">
+        </div>
+      </div>
+
+      <div id="date-mode-multi" class="hidden">
+        <div class="shopping-add-row">
+          <input type="date" id="event-date-pick">
+          <button type="button" id="btn-add-picked-date" class="btn btn-secondary btn-small">추가</button>
+        </div>
+        <div id="picked-dates-list" class="picked-dates-list"></div>
+        <p class="hint-text" id="picked-dates-hint">고른 날짜가 여기 표시돼요. 날짜를 눌러 지울 수 있어요.</p>
+      </div>
 
       <div class="event-time-block">
         <label class="checkbox-row">
@@ -277,28 +305,31 @@
         </div>
       </div>
 
-      <label class="field-label">반복</label>
-      <select id="event-repeat">
-        <option value="none">반복 안함</option>
-        <option value="daily">매일</option>
-        <option value="weekly">매주 (요일 선택)</option>
-        <option value="monthly">매월 (같은 날짜)</option>
-      </select>
+      <div id="event-repeat-block">
+        <label class="field-label">반복</label>
+        <select id="event-repeat">
+          <option value="none">반복 안함</option>
+          <option value="daily">매일</option>
+          <option value="weekly">매주 (요일 선택)</option>
+          <option value="monthly">매월 (같은 날짜)</option>
+        </select>
 
-      <div id="event-weekdays" class="weekday-row hidden">
-        <label class="weekday-toggle"><input type="checkbox" value="0"><span>일</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="1"><span>월</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="2"><span>화</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="3"><span>수</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="4"><span>목</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="5"><span>금</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="6"><span>토</span></label>
-      </div>
+        <div id="event-weekdays" class="weekday-row hidden">
+          <label class="weekday-toggle"><input type="checkbox" value="0"><span>일</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="1"><span>월</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="2"><span>화</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="3"><span>수</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="4"><span>목</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="5"><span>금</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="6"><span>토</span></label>
+        </div>
 
-      <div id="event-until-row" class="hidden">
-        <label class="field-label">반복 종료일 (선택 · 비우면 계속)</label>
-        <input type="date" id="event-until">
+        <div id="event-until-row" class="hidden">
+          <label class="field-label">반복 종료일 (선택 · 비우면 계속)</label>
+          <input type="date" id="event-until">
+        </div>
       </div>
+      <p class="hint-text hidden" id="event-repeat-disabled-hint">기간/여러 날짜 선택 시에는 반복을 함께 쓸 수 없어요.</p>
 
       <label class="field-label">담당</label>
       <select id="event-assignee"></select>
