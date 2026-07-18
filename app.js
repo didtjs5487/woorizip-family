@@ -700,6 +700,7 @@ function setEventDateMode(mode) {
   document.getElementById('event-date').required = mode === 'single';
   document.getElementById('event-repeat-block').classList.toggle('hidden', mode !== 'single');
   document.getElementById('event-repeat-disabled-hint').classList.toggle('hidden', mode === 'single');
+  if (mode === 'multi') renderMultiCal();
 }
 document.querySelectorAll('.date-mode-btn').forEach(btn => {
   btn.addEventListener('click', () => setEventDateMode(btn.dataset.dateMode));
@@ -714,20 +715,57 @@ function renderPickedEventDates() {
     chip.type = 'button';
     chip.className = 'picked-date-chip';
     chip.innerHTML = `${Number(m)}/${Number(day)} <span class="picked-date-remove">✕</span>`;
-    chip.addEventListener('click', () => {
-      pickedEventDates = pickedEventDates.filter(x => x !== d);
-      renderPickedEventDates();
-    });
+    chip.addEventListener('click', () => togglePickedEventDate(d));
     wrap.appendChild(chip);
   });
   document.getElementById('picked-dates-hint').classList.toggle('hidden', pickedEventDates.length > 0);
 }
-document.getElementById('btn-add-picked-date').addEventListener('click', () => {
-  const input = document.getElementById('event-date-pick');
-  if (!input.value) return;
-  if (!pickedEventDates.includes(input.value)) pickedEventDates.push(input.value);
-  input.value = '';
+
+function togglePickedEventDate(dateStr) {
+  if (pickedEventDates.includes(dateStr)) {
+    pickedEventDates = pickedEventDates.filter(x => x !== dateStr);
+  } else {
+    pickedEventDates.push(dateStr);
+  }
   renderPickedEventDates();
+  renderMultiCal();
+}
+
+/* Tappable mini-calendar for picking several (not necessarily consecutive) dates */
+let multiCalYear = new Date().getFullYear();
+let multiCalMonth = new Date().getMonth();
+
+function renderMultiCal() {
+  const grid = document.getElementById('multi-cal-grid');
+  if (!grid) return;
+  document.getElementById('multi-cal-month-label').textContent = `${multiCalYear}. ${MONTHS_KO[multiCalMonth]}`;
+  grid.innerHTML = '';
+  const firstOfMonth = new Date(multiCalYear, multiCalMonth, 1);
+  const startOffset = firstOfMonth.getDay();
+  const gridStart = new Date(multiCalYear, multiCalMonth, 1 - startOffset);
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    const dateStr = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    if (d.getMonth() !== multiCalMonth) cell.classList.add('other-month');
+    if (dateStr === todayStr()) cell.classList.add('today');
+    if (pickedEventDates.includes(dateStr)) cell.classList.add('selected');
+    cell.textContent = d.getDate();
+    cell.addEventListener('click', () => togglePickedEventDate(dateStr));
+    grid.appendChild(cell);
+  }
+}
+document.getElementById('multi-cal-prev').addEventListener('click', () => {
+  multiCalMonth--;
+  if (multiCalMonth < 0) { multiCalMonth = 11; multiCalYear--; }
+  renderMultiCal();
+});
+document.getElementById('multi-cal-next').addEventListener('click', () => {
+  multiCalMonth++;
+  if (multiCalMonth > 11) { multiCalMonth = 0; multiCalYear++; }
+  renderMultiCal();
 });
 
 function syncRepeatRows() {
@@ -807,6 +845,9 @@ function openEventModal(ev) {
   document.getElementById('event-date-end').value = ev?.endDate || ev?.date || state.selectedDate;
   pickedEventDates = ev?.dates ? [...ev.dates] : [];
   renderPickedEventDates();
+  const multiCalSeed = pickedEventDates[0] || state.selectedDate;
+  const [seedY, seedM] = multiCalSeed.split('-').map(Number);
+  multiCalYear = seedY; multiCalMonth = seedM - 1;
   setEventDateMode(ev?.dates?.length ? 'multi' : ev?.endDate ? 'range' : 'single');
   document.getElementById('event-allday').checked = ev ? !!ev.allDay : false;
   document.getElementById('event-time-row').style.display = (ev && ev.allDay) ? 'none' : 'grid';

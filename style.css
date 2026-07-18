@@ -178,6 +178,7 @@ button, input, select, textarea { font-family: inherit; }
 /* ===== Calendar ===== */
 .cal-controls { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 14px; }
 .cal-month-label { font-family: var(--font-display); font-size: 22px; font-weight: 600; margin: 0; }
+.multi-cal-month-label { font-size: 17px; }
 .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; color: var(--ink-soft); font-size: 12px; font-family: var(--font-mono); margin-bottom: 6px; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 
