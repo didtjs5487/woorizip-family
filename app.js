@@ -23,6 +23,14 @@ const MONTHS_KO = ['1월','2월','3월','4월','5월','6월','7월','8월','9월
 
 function colorFor(idx) { return MEMBER_COLORS[idx % MEMBER_COLORS.length].hex; }
 function initialsFor(name) { return (name || '?').trim().slice(0,1).toUpperCase(); }
+// Members are keyed by normalized name (not device auth uid) so the same
+// person entering from a phone and a desktop lands on the same member —
+// otherwise every device would register itself as a separate family member.
+function memberKeyFor(name) {
+  // used both as a Firestore doc id and as a dynamic map-field key (e.g. `reactions.${memberId}`),
+  // so strip characters that are meaningful in Firestore paths/field-path strings.
+  return (name || '').trim().replace(/\s+/g, ' ').toLowerCase().replace(/[.$#\[\]/]/g, '');
+}
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -31,11 +39,12 @@ function pad2(n){ return String(n).padStart(2,'0'); }
 
 /* ===================== App state ===================== */
 const state = {
-  user: null,          // firebase auth user
-  userDoc: null,       // { name, email, familyId }
+  user: null,          // firebase auth user (per-device identity)
+  userDoc: null,       // { name, email, familyId, memberId }
   familyId: null,
+  memberId: null,       // this device's family-member id (shared across devices with the same name)
   familyDoc: null,      // { name, inviteCode }
-  members: {},          // uid -> { name, colorIndex }
+  members: {},          // memberId -> { name, colorIndex }
   events: {},            // eventId -> event data
   tasks: {},             // taskId -> task data
   shopping: {},          // itemId -> shopping item data
@@ -111,15 +120,17 @@ document.getElementById('form-entry').addEventListener('submit', async (e) => {
 
     const q = await db.collection('families').where('sharedPassword', '==', password).limit(1).get();
     if (!q.empty) {
-      // family exists → join it
+      // family exists → join it. Members are keyed by name, not device uid, so
+      // entering the same name from another device links to the same person.
       const famDoc = q.docs[0];
+      const memberId = memberKeyFor(name);
       const membersSnap = await famDoc.ref.collection('members').get();
-      const alreadyMember = membersSnap.docs.some(d => d.id === uid);
-      await famDoc.ref.collection('members').doc(uid).set({
+      const existing = membersSnap.docs.find(d => d.id === memberId);
+      await famDoc.ref.collection('members').doc(memberId).set({
         name,
-        colorIndex: alreadyMember ? (membersSnap.docs.find(d => d.id === uid).data().colorIndex ?? 0) : membersSnap.size,
+        colorIndex: existing ? (existing.data().colorIndex ?? 0) : membersSnap.size,
       }, { merge: true });
-      await db.collection('users').doc(uid).set({ familyId: famDoc.id }, { merge: true });
+      await db.collection('users').doc(uid).set({ familyId: famDoc.id, memberId }, { merge: true });
       // the user-doc onSnapshot listener will drive enterFamily()
     } else {
       // no family with this password — offer to create one
@@ -151,10 +162,11 @@ document.getElementById('btn-entry-create').addEventListener('click', async () =
       createdBy: uid,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    await familyRef.collection('members').doc(uid).set({
+    const memberId = memberKeyFor(pendingEntry.name);
+    await familyRef.collection('members').doc(memberId).set({
       name: pendingEntry.name, colorIndex: 0
     });
-    await db.collection('users').doc(uid).set({ name: pendingEntry.name, familyId: familyRef.id }, { merge: true });
+    await db.collection('users').doc(uid).set({ name: pendingEntry.name, familyId: familyRef.id, memberId }, { merge: true });
     pendingEntry = null;
   } catch (err) {
     errEl.textContent = friendlyEntryError(err);
@@ -192,6 +204,7 @@ auth.onAuthStateChanged((user) => {
   state.user = user;
   state.unsubUser = db.collection('users').doc(user.uid).onSnapshot(snap => {
     state.userDoc = snap.data() || {};
+    state.memberId = state.userDoc.memberId || null;
     if (!state.userDoc.familyId) {
       teardownFamilyListeners();
       state.familyId = null;
@@ -244,7 +257,7 @@ function enterFamily(familyId) {
           if (wasLoaded && !change.doc.metadata.hasPendingWrites) {
             const ev = state.events[change.doc.id];
             const who = state.members[ev.createdBy]?.name || '가족';
-            if (ev.createdBy !== state.user.uid) {
+            if (ev.createdBy !== state.memberId) {
               notifyUser(`${who}님이 일정을 추가했어요`, ev.title);
             }
           }
@@ -291,8 +304,8 @@ function enterFamily(familyId) {
       snap.docChanges().forEach(change => {
         if (change.type !== 'modified') return;
         const n = change.doc.data();
-        if (n.nudge && n.nudge.by && n.nudge.by !== state.user.uid && n.nudge.at &&
-            (!n.readBy || !n.readBy.includes(state.user.uid)) &&
+        if (n.nudge && n.nudge.by && n.nudge.by !== state.memberId && n.nudge.at &&
+            (!n.readBy || !n.readBy.includes(state.memberId)) &&
             !change.doc.metadata.hasPendingWrites) {
           const key = n.nudge.at.seconds || Date.now();
           if (state.shownNudges[change.doc.id] !== key) {
@@ -340,14 +353,22 @@ function notifyUser(title, body) {
 function renderMembers() {
   const list = document.getElementById('member-list');
   list.innerHTML = '';
-  Object.entries(state.members).forEach(([uid, m]) => {
+  Object.entries(state.members).forEach(([memberId, m]) => {
     const row = document.createElement('div');
     row.className = 'member-row';
     row.innerHTML = `
       <span class="avatar-dot" style="background:${colorFor(m.colorIndex)}">${initialsFor(m.name)}</span>
       <span>${escapeHtml(m.name)}</span>
-      ${uid === state.user.uid ? '<span class="member-you">나</span>' : ''}
+      <span class="member-row-right">
+        ${memberId === state.memberId ? '<span class="member-you">나</span>' : ''}
+        <button class="member-delete-btn" title="구성원 삭제" aria-label="구성원 삭제">✕</button>
+      </span>
     `;
+    row.querySelector('.member-delete-btn').addEventListener('click', () => {
+      if (confirm(`"${m.name}" 구성원을 목록에서 삭제할까요?\n(등록했던 일정·할일은 남아있고, 중복된 기기 항목을 정리할 때 써요.)`)) {
+        db.collection('families').doc(state.familyId).collection('members').doc(memberId).delete();
+      }
+    });
     list.appendChild(row);
   });
 }
@@ -753,7 +774,7 @@ document.getElementById('form-event').addEventListener('submit', async (e) => {
     if (state.editingEventId) {
       await col.doc(state.editingEventId).update(data);
     } else {
-      await col.add({ ...data, createdBy: state.user.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await col.add({ ...data, createdBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
     }
     closeEventModal();
   } catch (err) {
@@ -778,7 +799,7 @@ document.getElementById('form-quick-event').addEventListener('submit', async (e)
     await db.collection('families').doc(state.familyId).collection('events').add({
       title, date: state.selectedDate, allDay: true, startTime: null, endTime: null,
       assignee: 'all', notes: null, repeat: 'none', weekdays: [], repeatUntil: null,
-      createdBy: state.user.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      createdBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     input.value = '';
   } catch (err) { toast('추가 실패: ' + (err.code || err.message)); }
@@ -832,7 +853,7 @@ function renderTasks() {
   if (!list) return;
   list.innerHTML = '';
   let tasks = Object.values(state.tasks);
-  if (state.taskFilter === 'mine') tasks = tasks.filter(t => t.assignee === state.user.uid);
+  if (state.taskFilter === 'mine') tasks = tasks.filter(t => t.assignee === state.memberId);
   if (state.taskFilter === 'done') tasks = tasks.filter(t => t.done);
   tasks.sort((a,b) => (a.done === b.done) ? 0 : (a.done ? 1 : -1));
 
@@ -846,7 +867,7 @@ function renderTasks() {
 async function toggleTaskDone(t) {
   await db.collection('families').doc(state.familyId).collection('tasks').doc(t.id).update({
     done: !t.done,
-    completedBy: !t.done ? state.user.uid : null,
+    completedBy: !t.done ? state.memberId : null,
     completedAt: !t.done ? firebase.firestore.FieldValue.serverTimestamp() : null,
   });
 }
@@ -911,7 +932,7 @@ document.getElementById('form-task').addEventListener('submit', async (e) => {
     if (state.editingTaskId) {
       await col.doc(state.editingTaskId).update(data);
     } else {
-      await col.add({ ...data, done: false, createdBy: state.user.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await col.add({ ...data, done: false, createdBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
     }
     closeTaskModal();
   } catch (err) {
@@ -979,7 +1000,7 @@ function renderShopping() {
 async function toggleShoppingPurchased(item) {
   await db.collection('families').doc(state.familyId).collection('shopping').doc(item.id).update({
     purchased: !item.purchased,
-    purchasedBy: !item.purchased ? state.user.uid : null,
+    purchasedBy: !item.purchased ? state.memberId : null,
   });
 }
 
@@ -989,7 +1010,7 @@ document.getElementById('form-shopping-add').addEventListener('submit', async (e
   const name = input.value.trim();
   if (!name) return;
   await db.collection('families').doc(state.familyId).collection('shopping').add({
-    name, purchased: false, requestedBy: state.user.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    name, purchased: false, requestedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
   input.value = '';
 });
@@ -1046,7 +1067,7 @@ function renderWishes() {
 async function toggleWishDone(w) {
   await db.collection('families').doc(state.familyId).collection('wishes').doc(w.id).update({
     done: !w.done,
-    doneBy: !w.done ? state.user.uid : null,
+    doneBy: !w.done ? state.memberId : null,
   });
 }
 
@@ -1059,7 +1080,7 @@ document.getElementById('form-wish-add').addEventListener('submit', async (e) =>
   try {
     await db.collection('families').doc(state.familyId).collection('wishes').add({
       title, category, done: false,
-      requestedBy: state.user.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      requestedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     input.value = '';
   } catch (err) {
@@ -1079,8 +1100,8 @@ document.getElementById('form-notice-add').addEventListener('submit', async (e) 
   const pinned = document.getElementById('notice-pin').checked;
   try {
     await db.collection('families').doc(state.familyId).collection('notices').add({
-      text, pinned, reactions: {}, readBy: [state.user.uid],
-      createdBy: state.user.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      text, pinned, reactions: {}, readBy: [state.memberId],
+      createdBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     ta.value = '';
     document.getElementById('notice-pin').checked = false;
@@ -1095,8 +1116,8 @@ function noticeRef(id) {
 }
 async function toggleReaction(id, label) {
   const n = state.notices[id]; if (!n) return;
-  const field = 'reactions.' + state.user.uid;
-  const mine = (n.reactions || {})[state.user.uid];
+  const field = 'reactions.' + state.memberId;
+  const mine = (n.reactions || {})[state.memberId];
   await noticeRef(id).update({ [field]: mine === label ? firebase.firestore.FieldValue.delete() : label });
 }
 async function toggleNoticePin(id) {
@@ -1104,7 +1125,7 @@ async function toggleNoticePin(id) {
   await noticeRef(id).update({ pinned: !n.pinned });
 }
 async function nudgeNotice(id) {
-  await noticeRef(id).update({ nudge: { by: state.user.uid, at: firebase.firestore.FieldValue.serverTimestamp() } });
+  await noticeRef(id).update({ nudge: { by: state.memberId, at: firebase.firestore.FieldValue.serverTimestamp() } });
   toast('안 읽은 가족에게 콕 알림을 보냈어요');
 }
 async function deleteNotice(id) {
@@ -1123,10 +1144,10 @@ function markNoticesReadIfVisible() {
   if (tab && !tab.classList.contains('hidden')) markNoticesRead();
 }
 function markNoticesRead() {
-  if (!state.user) return;
+  if (!state.memberId) return;
   Object.values(state.notices).forEach(n => {
-    if (!n.readBy || !n.readBy.includes(state.user.uid)) {
-      noticeRef(n.id).update({ readBy: firebase.firestore.FieldValue.arrayUnion(state.user.uid) }).catch(() => {});
+    if (!n.readBy || !n.readBy.includes(state.memberId)) {
+      noticeRef(n.id).update({ readBy: firebase.firestore.FieldValue.arrayUnion(state.memberId) }).catch(() => {});
     }
   });
 }
@@ -1146,10 +1167,10 @@ function renderNotices() {
   const memberCount = Object.keys(state.members).length || 1;
   items.forEach(n => {
     const author = state.members[n.createdBy]?.name || '?';
-    const mine = (n.reactions || {})[state.user.uid];
+    const mine = (n.reactions || {})[state.memberId];
     const reactionEntries = Object.entries(n.reactions || {});
     const readBy = n.readBy || [];
-    const isAuthor = n.createdBy === state.user.uid;
+    const isAuthor = n.createdBy === state.memberId;
     const unread = memberCount - readBy.length;
 
     const summary = reactionEntries.map(([uid, label]) =>
@@ -1281,7 +1302,7 @@ document.getElementById('form-anniversary').addEventListener('submit', async (e)
     if (state.editingAnniversaryId) {
       await col.doc(state.editingAnniversaryId).update(data);
     } else {
-      await col.add({ ...data, createdBy: state.user.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await col.add({ ...data, createdBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
     }
     closeAnniversaryModal();
   } catch (err) {

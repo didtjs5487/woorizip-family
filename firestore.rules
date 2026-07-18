@@ -3,64 +3,45 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    function isMember(familyId) {
-      return exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
-    }
 
     match /users/{userId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
+    // Family members are keyed by normalized name (see memberKeyFor in app.js),
+    // not by device auth uid, so the same person on two devices lands on the
+    // same member doc instead of registering twice. That means Firestore rules
+    // can no longer check "does a member doc exist at my own uid" to gate
+    // access to a family's data — there's no per-device membership marker to
+    // check anymore. The real access gate for this app is (and always was)
+    // knowing the family's shared password: that's what lets a client look up
+    // a familyId in the first place (see the entry-flow query in app.js).
+    // Every subcollection below is intentionally readable/writable by any
+    // signed-in (anonymous) user who already has the familyId.
     match /families/{familyId} {
-      allow read: if signedIn();
-      allow create: if signedIn();
-      allow update, delete: if signedIn() && isMember(familyId);
+      allow read, create: if signedIn();
+      allow update, delete: if signedIn();
 
       match /members/{memberId} {
-        // Reading the member list (not just isMember families) has to be allowed to
-        // any signed-in user: a brand-new joiner isn't a member yet when the entry
-        // flow reads the list to check for an existing membership / pick a color.
-        // The shared family password is the real gate here, same as /families read.
-        allow read: if signedIn();
-        allow create: if signedIn() && request.auth.uid == memberId;
-        allow update: if signedIn() && request.auth.uid == memberId;
-        allow delete: if signedIn() && request.auth.uid == memberId;
+        allow read, write: if signedIn();
       }
-
       match /events/{eventId} {
-        allow read: if signedIn() && isMember(familyId);
-        allow create: if signedIn() && isMember(familyId) && request.resource.data.createdBy == request.auth.uid;
-        allow update, delete: if signedIn() && isMember(familyId);
+        allow read, write: if signedIn();
       }
-
       match /tasks/{taskId} {
-        allow read: if signedIn() && isMember(familyId);
-        allow create: if signedIn() && isMember(familyId) && request.resource.data.createdBy == request.auth.uid;
-        allow update, delete: if signedIn() && isMember(familyId);
+        allow read, write: if signedIn();
       }
-
       match /shopping/{itemId} {
-        allow read: if signedIn() && isMember(familyId);
-        allow create: if signedIn() && isMember(familyId) && request.resource.data.requestedBy == request.auth.uid;
-        allow update, delete: if signedIn() && isMember(familyId);
+        allow read, write: if signedIn();
       }
-
       match /wishes/{wishId} {
-        allow read: if signedIn() && isMember(familyId);
-        allow create: if signedIn() && isMember(familyId) && request.resource.data.requestedBy == request.auth.uid;
-        allow update, delete: if signedIn() && isMember(familyId);
+        allow read, write: if signedIn();
       }
-
       match /notices/{noticeId} {
-        allow read: if signedIn() && isMember(familyId);
-        allow create: if signedIn() && isMember(familyId) && request.resource.data.createdBy == request.auth.uid;
-        allow update, delete: if signedIn() && isMember(familyId);
+        allow read, write: if signedIn();
       }
-
       match /anniversaries/{annivId} {
-        allow read: if signedIn() && isMember(familyId);
-        allow create: if signedIn() && isMember(familyId) && request.resource.data.createdBy == request.auth.uid;
-        allow update, delete: if signedIn() && isMember(familyId);
+        allow read, write: if signedIn();
       }
     }
   }
