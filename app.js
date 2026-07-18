@@ -202,14 +202,35 @@ auth.onAuthStateChanged((user) => {
     return;
   }
   state.user = user;
-  state.unsubUser = db.collection('users').doc(user.uid).onSnapshot(snap => {
+  state.unsubUser = db.collection('users').doc(user.uid).onSnapshot(async snap => {
     state.userDoc = snap.data() || {};
-    state.memberId = state.userDoc.memberId || null;
     if (!state.userDoc.familyId) {
+      state.memberId = null;
       teardownFamilyListeners();
       state.familyId = null;
       showScreen('screen-entry');
-    } else if (state.familyId !== state.userDoc.familyId) {
+      return;
+    }
+    if (!state.userDoc.memberId) {
+      // This session signed in before members were keyed by name (memberId).
+      // Backfill it from the name we already have on file so this device's
+      // actions attribute correctly instead of silently using a null id.
+      if (state.userDoc.name) {
+        try {
+          const memberId = memberKeyFor(state.userDoc.name);
+          const membersCol = db.collection('families').doc(state.userDoc.familyId).collection('members');
+          const memberSnap = await membersCol.doc(memberId).get();
+          if (!memberSnap.exists) {
+            const membersSnap = await membersCol.get();
+            await membersCol.doc(memberId).set({ name: state.userDoc.name, colorIndex: membersSnap.size }, { merge: true });
+          }
+          await db.collection('users').doc(user.uid).set({ memberId }, { merge: true });
+        } catch (e) { /* will retry on next snapshot */ }
+      }
+      return; // the memberId write above re-fires this listener
+    }
+    state.memberId = state.userDoc.memberId;
+    if (state.familyId !== state.userDoc.familyId) {
       state.familyId = state.userDoc.familyId;
       enterFamily(state.familyId);
     }
