@@ -271,12 +271,17 @@
       </div>
 
       <div id="date-mode-multi" class="hidden">
-        <div class="shopping-add-row">
-          <input type="date" id="event-date-pick">
-          <button type="button" id="btn-add-picked-date" class="btn btn-secondary btn-small">추가</button>
+        <div class="cal-controls">
+          <button type="button" id="multi-cal-prev" class="icon-btn" aria-label="이전 달">‹</button>
+          <h4 id="multi-cal-month-label" class="cal-month-label multi-cal-month-label"></h4>
+          <button type="button" id="multi-cal-next" class="icon-btn" aria-label="다음 달">›</button>
         </div>
+        <div class="cal-weekdays">
+          <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+        </div>
+        <div id="multi-cal-grid" class="cal-grid"></div>
         <div id="picked-dates-list" class="picked-dates-list"></div>
-        <p class="hint-text" id="picked-dates-hint">고른 날짜가 여기 표시돼요. 날짜를 눌러 지울 수 있어요.</p>
+        <p class="hint-text" id="picked-dates-hint">날짜를 눌러서 여러 개 골라주세요. 다시 누르면 빠져요.</p>
       </div>
 
       <div class="event-time-block">
