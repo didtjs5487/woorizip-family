@@ -429,6 +429,8 @@ function weekdayOf(dateStr) {
   return new Date(y, m - 1, d).getDay();
 }
 function eventOccursOn(ev, dateStr) {
+  if (ev.dates && ev.dates.length) return ev.dates.includes(dateStr);
+  if (ev.endDate) return dateStr >= ev.date && dateStr <= ev.endDate;
   const repeat = ev.repeat || 'none';
   if (repeat === 'none') return ev.date === dateStr;
   if (dateStr < ev.date) return false;                       // before it starts
@@ -442,6 +444,16 @@ function eventOccursOn(ev, dateStr) {
     return Number(dateStr.split('-')[2]) === Number(ev.date.split('-')[2]);
   }
   return false;
+}
+/* Multi-day label for cards: "7/20 ~ 7/22" for a range, "여러 날 (3일)" for picked dates */
+function multiDateLabelFor(ev) {
+  if (ev.dates && ev.dates.length > 1) return `여러 날 (${ev.dates.length}일)`;
+  if (ev.endDate && ev.endDate !== ev.date) {
+    const [, m1, d1] = ev.date.split('-');
+    const [, m2, d2] = ev.endDate.split('-');
+    return `${Number(m1)}/${Number(d1)} ~ ${Number(m2)}/${Number(d2)}`;
+  }
+  return '';
 }
 function eventsOnDate(dateStr) {
   return Object.values(state.events).filter(ev => eventOccursOn(ev, dateStr));
@@ -548,8 +560,9 @@ function buildEventCard(ev) {
   const timeLabel = ev.allDay ? '하루 종일' : [ev.startTime, ev.endTime].filter(Boolean).join(' – ');
   const assigneeName = ev.assignee === 'all' ? '전체' : (state.members[ev.assignee]?.name || '?');
   const repeatLabel = repeatLabelFor(ev);
+  const multiLabel = multiDateLabelFor(ev);
   card.innerHTML = `
-    <p class="event-title">${escapeHtml(ev.title)}${repeatLabel ? ` <span class="repeat-chip">↻ ${repeatLabel}</span>` : ''}</p>
+    <p class="event-title">${escapeHtml(ev.title)}${repeatLabel ? ` <span class="repeat-chip">↻ ${repeatLabel}</span>` : ''}${multiLabel ? ` <span class="repeat-chip">📆 ${multiLabel}</span>` : ''}</p>
     <div class="event-meta">
       <span>${timeLabel}</span>
       <span class="event-assignee-badge">
@@ -653,6 +666,49 @@ document.getElementById('event-allday').addEventListener('change', (e) => {
   document.getElementById('event-time-row').style.display = e.target.checked ? 'none' : 'grid';
 });
 
+/* ---- Date mode: single day / date range / several picked dates ---- */
+let eventDateMode = 'single';
+let pickedEventDates = [];
+
+function setEventDateMode(mode) {
+  eventDateMode = mode;
+  document.querySelectorAll('.date-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.dateMode === mode));
+  document.getElementById('date-mode-single').classList.toggle('hidden', mode !== 'single');
+  document.getElementById('date-mode-range').classList.toggle('hidden', mode !== 'range');
+  document.getElementById('date-mode-multi').classList.toggle('hidden', mode !== 'multi');
+  document.getElementById('event-date').required = mode === 'single';
+  document.getElementById('event-repeat-block').classList.toggle('hidden', mode !== 'single');
+  document.getElementById('event-repeat-disabled-hint').classList.toggle('hidden', mode === 'single');
+}
+document.querySelectorAll('.date-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => setEventDateMode(btn.dataset.dateMode));
+});
+
+function renderPickedEventDates() {
+  const wrap = document.getElementById('picked-dates-list');
+  wrap.innerHTML = '';
+  [...pickedEventDates].sort().forEach(d => {
+    const [, m, day] = d.split('-');
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'picked-date-chip';
+    chip.innerHTML = `${Number(m)}/${Number(day)} <span class="picked-date-remove">✕</span>`;
+    chip.addEventListener('click', () => {
+      pickedEventDates = pickedEventDates.filter(x => x !== d);
+      renderPickedEventDates();
+    });
+    wrap.appendChild(chip);
+  });
+  document.getElementById('picked-dates-hint').classList.toggle('hidden', pickedEventDates.length > 0);
+}
+document.getElementById('btn-add-picked-date').addEventListener('click', () => {
+  const input = document.getElementById('event-date-pick');
+  if (!input.value) return;
+  if (!pickedEventDates.includes(input.value)) pickedEventDates.push(input.value);
+  input.value = '';
+  renderPickedEventDates();
+});
+
 function syncRepeatRows() {
   const repeat = document.getElementById('event-repeat').value;
   document.getElementById('event-weekdays').classList.toggle('hidden', repeat !== 'weekly');
@@ -726,6 +782,11 @@ function openEventModal(ev) {
   document.getElementById('modal-event-title').textContent = ev ? '일정 수정' : '일정 추가';
   document.getElementById('event-title').value = ev ? ev.title : '';
   document.getElementById('event-date').value = ev ? ev.date : state.selectedDate;
+  document.getElementById('event-date-start').value = ev?.date || state.selectedDate;
+  document.getElementById('event-date-end').value = ev?.endDate || ev?.date || state.selectedDate;
+  pickedEventDates = ev?.dates ? [...ev.dates] : [];
+  renderPickedEventDates();
+  setEventDateMode(ev?.dates?.length ? 'multi' : ev?.endDate ? 'range' : 'single');
   document.getElementById('event-allday').checked = ev ? !!ev.allDay : false;
   document.getElementById('event-time-row').style.display = (ev && ev.allDay) ? 'none' : 'grid';
   setTimeSel('event-start', ev?.startTime);
@@ -751,13 +812,26 @@ document.getElementById('form-event').addEventListener('submit', async (e) => {
   const errEl = document.getElementById('event-error');
   errEl.textContent = '';
   const allDay = document.getElementById('event-allday').checked;
-  const repeat = document.getElementById('event-repeat').value;
-  const weekdays = repeat === 'weekly'
-    ? [...document.querySelectorAll('#event-weekdays input:checked')].map(c => Number(c.value))
-    : [];
+
+  let date, endDate = null, dates = null, repeat = 'none', weekdays = [], repeatUntil = null;
+  if (eventDateMode === 'range') {
+    date = document.getElementById('event-date-start').value;
+    endDate = document.getElementById('event-date-end').value;
+  } else if (eventDateMode === 'multi') {
+    dates = [...pickedEventDates].sort();
+    date = dates[0] || '';
+  } else {
+    date = document.getElementById('event-date').value;
+    repeat = document.getElementById('event-repeat').value;
+    weekdays = repeat === 'weekly'
+      ? [...document.querySelectorAll('#event-weekdays input:checked')].map(c => Number(c.value))
+      : [];
+    repeatUntil = repeat !== 'none' ? (document.getElementById('event-until').value || null) : null;
+  }
+
   const data = {
     title: document.getElementById('event-title').value.trim(),
-    date: document.getElementById('event-date').value,
+    date, endDate, dates,
     allDay,
     startTime: allDay ? null : getTimeSel('event-start'),
     endTime: allDay ? null : getTimeSel('event-end'),
@@ -765,9 +839,15 @@ document.getElementById('form-event').addEventListener('submit', async (e) => {
     notes: document.getElementById('event-notes').value.trim() || null,
     repeat,
     weekdays,
-    repeatUntil: repeat !== 'none' ? (document.getElementById('event-until').value || null) : null,
+    repeatUntil,
   };
   if (!data.title || !data.date) { errEl.textContent = '제목과 날짜를 입력해주세요.'; return; }
+  if (eventDateMode === 'range' && data.endDate && data.endDate < data.date) {
+    errEl.textContent = '종료일이 시작일보다 빠를 수 없어요.'; return;
+  }
+  if (eventDateMode === 'multi' && (!dates || dates.length === 0)) {
+    errEl.textContent = '날짜를 하나 이상 추가해주세요.'; return;
+  }
   if (repeat === 'weekly' && weekdays.length === 0) { errEl.textContent = '반복할 요일을 하나 이상 선택해주세요.'; return; }
   try {
     const col = db.collection('families').doc(state.familyId).collection('events');

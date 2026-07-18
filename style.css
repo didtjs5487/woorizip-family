@@ -346,13 +346,22 @@ button, input, select, textarea { font-family: inherit; }
 .notice-mini.nudge { color: #C25A82; border-color: #F3C3D6; }
 .notice-mini.del { color: var(--danger); }
 
-/* ===== View toggles (calendar/list, request sub-tabs) ===== */
+/* ===== View toggles (calendar/list, request sub-tabs, event date mode) ===== */
 .view-toggle { display: flex; gap: 6px; background: var(--paper-dim); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
-.view-btn, .goods-view-btn {
+.view-btn, .goods-view-btn, .date-mode-btn {
   flex: 1; border: none; background: none; padding: 9px; border-radius: 9px;
   font-size: 13.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
 }
-.view-btn.active, .goods-view-btn.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow-pin); }
+.view-btn.active, .goods-view-btn.active, .date-mode-btn.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow-pin); }
+
+.picked-dates-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.picked-date-chip {
+  display: flex; align-items: center; gap: 6px; background: var(--paper-dim); border: 1px solid var(--border);
+  border-radius: 20px; padding: 6px 8px 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.picked-date-chip .picked-date-remove { color: var(--ink-soft); font-size: 13px; }
+.picked-date-chip:active { background: var(--danger); color: #fff; border-color: var(--danger); }
+.picked-date-chip:active .picked-date-remove { color: #fff; }
 
 /* ===== Request tab status strip ===== */
 .request-status { display: flex; gap: 8px; margin-bottom: 14px; }
