@@ -40,9 +40,6 @@ service cloud.firestore {
       match /notices/{noticeId} {
         allow read, write: if signedIn();
       }
-      match /quotes/{quoteId} {
-        allow read, write: if signedIn();
-      }
       match /anniversaries/{annivId} {
         allow read, write: if signedIn();
       }

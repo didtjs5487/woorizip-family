@@ -198,34 +198,6 @@
     </div>
   </section>
 
-  <!-- QUOTES TAB (life quotes · famous lines · memorable scenes) -->
-  <section id="tab-quotes" class="tab-panel hidden">
-    <div class="section-header">
-      <h2 class="section-title">명언함</h2>
-    </div>
-    <p class="wish-hint">마음에 남는 명언·명대사·명장면을 적어두면 가족이 함께 꺼내볼 수 있어요 💬</p>
-    <form id="form-quote-add" class="wish-add">
-      <textarea id="quote-text" rows="2" placeholder="예: 오늘 하루도 수고했어." required></textarea>
-      <input type="text" id="quote-source" placeholder="출처 (선택, 예: 영화 인터스텔라, 괴테)">
-      <div class="wish-add-row2">
-        <select id="quote-category">
-          <option value="quote">💬 명언</option>
-          <option value="line">🎬 명대사</option>
-          <option value="scene">🎞️ 명장면</option>
-        </select>
-        <button type="submit" class="btn btn-pin btn-small">추가</button>
-      </div>
-    </form>
-    <div class="filter-row">
-      <button class="filter-btn active" data-qfilter="all">전체</button>
-      <button class="filter-btn" data-qfilter="quote">💬 명언</button>
-      <button class="filter-btn" data-qfilter="line">🎬 명대사</button>
-      <button class="filter-btn" data-qfilter="scene">🎞️ 명장면</button>
-      <button class="filter-btn" data-qfilter="fav">⭐ 즐겨찾기</button>
-    </div>
-    <div id="quote-list" class="events-list"></div>
-  </section>
-
   <!-- FAMILY TAB -->
   <section id="tab-family" class="tab-panel hidden">
     <div class="family-card">
@@ -258,9 +230,6 @@
     </button>
     <button class="nav-btn" data-tab="request">
       <span class="nav-icon">🙋</span><span>요청</span>
-    </button>
-    <button class="nav-btn" data-tab="quotes">
-      <span class="nav-icon">💬</span><span>명언함</span>
     </button>
     <button class="nav-btn" data-tab="family">
       <span class="nav-icon">👪</span><span>가족</span>

@@ -52,8 +52,6 @@ const state = {
   wishFilter: 'all',
   notices: {},           // noticeId -> notice data
   shownNudges: {},       // noticeId -> last nudge timestamp we already toasted
-  quotes: {},            // quoteId -> life quote / famous line / memorable scene data
-  quoteFilter: 'all',
   anniversaries: {},     // annivId -> anniversary data
   viewYear: new Date().getFullYear(),
   viewMonth: new Date().getMonth(), // 0-indexed
@@ -68,7 +66,6 @@ const state = {
   unsubEvents: null,
   unsubTasks: null,
   unsubShopping: null,
-  unsubQuotes: null,
   unsubAnniversaries: null,
   eventsLoadedOnce: false,
   notifiedAnniversaryToday: null,
@@ -249,7 +246,6 @@ function teardownFamilyListeners() {
   if (state.unsubShopping) { state.unsubShopping(); state.unsubShopping = null; }
   if (state.unsubWishes) { state.unsubWishes(); state.unsubWishes = null; }
   if (state.unsubNotices) { state.unsubNotices(); state.unsubNotices = null; }
-  if (state.unsubQuotes) { state.unsubQuotes(); state.unsubQuotes = null; }
   if (state.unsubAnniversaries) { state.unsubAnniversaries(); state.unsubAnniversaries = null; }
   state.eventsLoadedOnce = false;
 }
@@ -344,14 +340,6 @@ function enterFamily(familyId) {
       snap.forEach(doc => { state.notices[doc.id] = { id: doc.id, ...doc.data() }; });
       renderNotices();
       markNoticesReadIfVisible();
-    });
-
-  state.unsubQuotes = db.collection('families').doc(familyId).collection('quotes')
-    .orderBy('createdAt', 'desc')
-    .onSnapshot(snap => {
-      state.quotes = {};
-      snap.forEach(doc => { state.quotes[doc.id] = { id: doc.id, ...doc.data() }; });
-      renderQuotes();
     });
 
   state.unsubAnniversaries = db.collection('families').doc(familyId).collection('anniversaries')
@@ -1264,86 +1252,6 @@ document.getElementById('form-wish-add').addEventListener('submit', async (e) =>
     input.value = '';
   } catch (err) {
     if (err.code === 'permission-denied') toast('위시리스트 권한 설정이 필요해요 (규칙 재게시)');
-    else toast('추가 실패: ' + (err.code || err.message));
-  }
-});
-
-/* ===================== Quotes (life quotes / famous lines / memorable scenes) ===================== */
-const QUOTE_CATEGORY_LABEL = { quote: '💬 명언', line: '🎬 명대사', scene: '🎞️ 명장면' };
-
-document.querySelectorAll('[data-qfilter]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    state.quoteFilter = btn.dataset.qfilter;
-    document.querySelectorAll('[data-qfilter]').forEach(b => b.classList.toggle('active', b === btn));
-    renderQuotes();
-  });
-});
-
-function renderQuotes() {
-  const list = document.getElementById('quote-list');
-  if (!list) return;
-  list.innerHTML = '';
-  let items = Object.values(state.quotes);
-  if (state.quoteFilter === 'fav') items = items.filter(q => (q.favoritedBy || []).includes(state.memberId));
-  else if (state.quoteFilter !== 'all') items = items.filter(q => (q.category || 'quote') === state.quoteFilter);
-
-  if (items.length === 0) {
-    list.innerHTML = '<p class="empty-state">아직 모아둔 명언이 없어요. 마음에 남는 말을 적어보세요 💬</p>';
-    return;
-  }
-
-  items.forEach(q => {
-    const m = state.members[q.addedBy];
-    const isFav = (q.favoritedBy || []).includes(state.memberId);
-    const card = document.createElement('div');
-    card.className = 'quote-card';
-    card.innerHTML = `
-      <span class="quote-tag">${QUOTE_CATEGORY_LABEL[q.category] || QUOTE_CATEGORY_LABEL.quote}</span>
-      <p class="quote-text">${escapeHtml(q.text)}</p>
-      ${q.source ? `<p class="quote-source">— ${escapeHtml(q.source)}</p>` : ''}
-      <div class="quote-foot">
-        <span class="avatar-dot" style="background:${m ? colorFor(m.colorIndex) : '#B9AE94'}">${initialsFor(m?.name || '?')}</span>
-        <span class="quote-byline">${escapeHtml(m?.name || '알 수 없음')}</span>
-        <div class="quote-actions">
-          <button class="quote-fav-btn" title="즐겨찾기">${isFav ? '⭐' : '☆'}</button>
-          <button class="quote-delete-btn" title="삭제" aria-label="삭제">✕</button>
-        </div>
-      </div>
-    `;
-    card.querySelector('.quote-fav-btn').addEventListener('click', () => toggleQuoteFavorite(q));
-    card.querySelector('.quote-delete-btn').addEventListener('click', () => {
-      if (confirm('이 항목을 삭제할까요?')) {
-        db.collection('families').doc(state.familyId).collection('quotes').doc(q.id).delete();
-      }
-    });
-    list.appendChild(card);
-  });
-}
-
-async function toggleQuoteFavorite(q) {
-  const favoritedBy = q.favoritedBy || [];
-  const next = favoritedBy.includes(state.memberId)
-    ? favoritedBy.filter(id => id !== state.memberId)
-    : [...favoritedBy, state.memberId];
-  await db.collection('families').doc(state.familyId).collection('quotes').doc(q.id).update({ favoritedBy: next });
-}
-
-document.getElementById('form-quote-add').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const textInput = document.getElementById('quote-text');
-  const text = textInput.value.trim();
-  if (!text) return;
-  const source = document.getElementById('quote-source').value.trim();
-  const category = document.getElementById('quote-category').value;
-  try {
-    await db.collection('families').doc(state.familyId).collection('quotes').add({
-      text, source, category, favoritedBy: [],
-      addedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    textInput.value = '';
-    document.getElementById('quote-source').value = '';
-  } catch (err) {
-    if (err.code === 'permission-denied') toast('명언함 권한 설정이 필요해요 (규칙 재게시)');
     else toast('추가 실패: ' + (err.code || err.message));
   }
 });
