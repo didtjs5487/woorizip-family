@@ -353,6 +353,28 @@ button, input, select, textarea { font-family: inherit; }
 .notice-mini.nudge { color: #C25A82; border-color: #F3C3D6; }
 .notice-mini.del { color: var(--danger); }
 
+.quote-card {
+  position: relative; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px 18px; box-shadow: var(--shadow-pin);
+}
+.quote-tag {
+  display: inline-block; font-size: 11px; font-weight: 700; color: var(--ink-soft);
+  background: var(--paper-dim); border-radius: 10px; padding: 2px 9px; margin-bottom: 8px;
+}
+.quote-text {
+  font-family: var(--font-display); font-size: 17px; line-height: 1.55; margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+.quote-source { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 10px; }
+.quote-foot { display: flex; align-items: center; gap: 7px; }
+.quote-foot .avatar-dot { width: 22px; height: 22px; font-size: 10px; }
+.quote-byline { font-size: 12.5px; color: var(--ink-soft); }
+.quote-actions { margin-left: auto; display: flex; gap: 4px; }
+.quote-fav-btn { background: none; border: none; font-size: 19px; cursor: pointer; padding: 2px; line-height: 1; }
+.quote-fav-btn:active { transform: scale(0.9); }
+.quote-delete-btn { background: none; border: none; color: var(--ink-soft); font-size: 15px; line-height: 1; cursor: pointer; padding: 4px; }
+.quote-delete-btn:active { color: var(--danger); }
+
 /* ===== View toggles (calendar/list, request sub-tabs, event date mode) ===== */
 .view-toggle { display: flex; gap: 6px; background: var(--paper-dim); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
 .modal-card .view-toggle { margin: 6px 0 10px; }
