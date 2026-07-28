@@ -1583,7 +1583,19 @@ function formatRelativeTime(ts) {
 /* ===================== PWA service worker ===================== */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      reg.update(); // check for a newer sw.js as soon as the app opens
+      setInterval(() => reg.update(), 60 * 60 * 1000); // and again hourly while it stays open
+    }).catch(() => {});
+  });
+  // Once a new service worker takes over, the page is still running old JS —
+  // reload so an already-installed PWA picks up the update automatically
+  // instead of silently staying on a stale version until manually reinstalled.
+  let reloadedForUpdate = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadedForUpdate) return;
+    reloadedForUpdate = true;
+    window.location.reload();
   });
 }
 
