@@ -80,7 +80,6 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
   document.getElementById(`tab-${name}`).classList.remove('hidden');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  if (name === 'notice') markNoticesRead();
 }
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
@@ -339,6 +338,7 @@ function enterFamily(familyId) {
       state.notices = {};
       snap.forEach(doc => { state.notices[doc.id] = { id: doc.id, ...doc.data() }; });
       renderNotices();
+      renderNoticeBanner();
       markNoticesReadIfVisible();
     });
 
@@ -574,6 +574,46 @@ function colorForAssignee(assignee) {
   return m ? colorFor(m.colorIndex) : '#B9AE94';
 }
 
+/* Group a day's events+tasks into member "rows", like a family wall calendar
+   (전체 row first, then each member in join order, unknown assignees under 기타) */
+function groupItemsByMember(events, tasks) {
+  const groups = [];
+  const tag = (arr, type) => arr.map(item => ({ type, item }));
+  const remaining = [...tag(events, 'event'), ...tag(tasks, 'task')];
+
+  const allItems = remaining.filter(x => x.item.assignee === 'all' || !x.item.assignee);
+  if (allItems.length) groups.push({ key: 'all', label: '전체', emoji: '👪', colorHex: '#B9AE94', items: allItems });
+
+  Object.entries(state.members)
+    .sort((a, b) => (a[1].colorIndex ?? 0) - (b[1].colorIndex ?? 0))
+    .forEach(([mid, m]) => {
+      const items = remaining.filter(x => x.item.assignee === mid);
+      if (items.length) groups.push({ key: mid, label: m.name, emoji: null, colorHex: colorFor(m.colorIndex), items });
+    });
+
+  const known = new Set(groups.flatMap(g => g.items.map(x => x.item)));
+  const orphan = remaining.filter(x => !known.has(x.item));
+  if (orphan.length) groups.push({ key: 'other', label: '기타', emoji: '❔', colorHex: '#B9AE94', items: orphan });
+
+  return groups;
+}
+
+/* Render a date's events+tasks grouped into member rows into the given container (does not clear it) */
+function renderGroupedItemCards(container, events, tasks) {
+  groupItemsByMember(events, tasks).forEach(g => {
+    const head = document.createElement('div');
+    head.className = 'member-group-header';
+    head.innerHTML = `<span class="avatar-dot" style="background:${g.colorHex}">${g.emoji || initialsFor(g.label)}</span><span>${escapeHtml(g.label)}</span>`;
+    container.appendChild(head);
+
+    g.items.filter(x => x.type === 'event').map(x => x.item)
+      .sort((a, b) => (a.allDay ? '' : a.startTime || '').localeCompare(b.allDay ? '' : b.startTime || ''))
+      .forEach(ev => container.appendChild(buildEventCard(ev)));
+    g.items.filter(x => x.type === 'task').map(x => x.item)
+      .forEach(t => container.appendChild(buildTaskCard(t)));
+  });
+}
+
 function buildEventCard(ev) {
   const card = document.createElement('div');
   card.className = 'event-card';
@@ -622,8 +662,7 @@ function renderDayPanel() {
     if (dayAnniversaries.length === 0) list.innerHTML += '<p class="empty-state">이 날은 일정이 없어요.</p>';
     return;
   }
-  dayEvents.forEach(ev => list.appendChild(buildEventCard(ev)));
-  dayTasks.forEach(t => list.appendChild(buildTaskCard(t)));
+  renderGroupedItemCards(list, dayEvents, dayTasks);
 }
 
 /* ===================== Calendar / List view toggle (per-device) ===================== */
@@ -671,8 +710,7 @@ function renderEventList() {
       card.textContent = `${a.type === 'birthday' ? '🎂' : '🎉'} ${a.title}`;
       wrap.appendChild(card);
     });
-    evs.forEach(ev => wrap.appendChild(buildEventCard(ev)));
-    tasks.forEach(t => wrap.appendChild(buildTaskCard(t)));
+    renderGroupedItemCards(wrap, evs, tasks);
   });
 }
 applyCalView(localStorage.getItem('calView') || 'calendar');
@@ -1301,14 +1339,15 @@ async function deleteNotice(id) {
 }
 function convertNoticeToTask(id) {
   const n = state.notices[id]; if (!n) return;
+  closeNoticeModal();
   showTab('request');
   applyGoodsView('tasks');
   openTaskModal(null);
   document.getElementById('task-title').value = (n.text || '').slice(0, 60);
 }
 function markNoticesReadIfVisible() {
-  const tab = document.getElementById('tab-notice');
-  if (tab && !tab.classList.contains('hidden')) markNoticesRead();
+  const modal = document.getElementById('modal-notice');
+  if (modal && !modal.classList.contains('hidden')) markNoticesRead();
 }
 function markNoticesRead() {
   if (!state.memberId) return;
@@ -1380,6 +1419,35 @@ function renderNotices() {
     list.appendChild(card);
   });
 }
+
+/* Mini banner shown above every tab: top pinned notice, else latest; opens the full board */
+function renderNoticeBanner() {
+  const banner = document.getElementById('notice-banner');
+  if (!banner) return;
+  const items = Object.values(state.notices).sort((a, b) => {
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+    return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+  });
+  if (items.length === 0) {
+    banner.classList.add('hidden');
+    return;
+  }
+  const top = items[0];
+  const author = state.members[top.createdBy]?.name || '?';
+  document.getElementById('notice-banner-text').textContent =
+    (top.pinned ? '📌 ' : '') + `${author}: ${top.text}`;
+  banner.classList.remove('hidden');
+}
+
+const noticeModal = document.getElementById('modal-notice');
+function openNoticeModal() {
+  noticeModal.classList.remove('hidden');
+  markNoticesRead();
+}
+function closeNoticeModal() { noticeModal.classList.add('hidden'); }
+document.getElementById('notice-banner').addEventListener('click', openNoticeModal);
+document.getElementById('modal-notice-close').addEventListener('click', closeNoticeModal);
+noticeModal.addEventListener('click', (e) => { if (e.target === noticeModal) closeNoticeModal(); });
 
 /* ===================== Anniversaries ===================== */
 function populateMonthDaySelects() {

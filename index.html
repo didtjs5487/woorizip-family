@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 
@@ -62,31 +62,25 @@
 <!-- MAIN APP -->
 <div id="screen-app" class="screen hidden">
 
-  <header class="app-header">
-    <div class="header-left">
-      <span class="brand-small">우리집</span>
-      <span class="family-name" id="family-name-label"></span>
-    </div>
-    <button id="btn-notif" class="icon-btn" title="알림 켜기" aria-label="알림 켜기">🔔</button>
-  </header>
-
-  <!-- NOTICE BOARD TAB (home) -->
-  <section id="tab-notice" class="tab-panel">
-    <div class="section-header">
-      <h2 class="section-title">가족 공지</h2>
-    </div>
-    <form id="form-notice-add" class="notice-add">
-      <textarea id="notice-text" rows="2" placeholder="가족에게 한마디… (예: 오늘 저녁 7시 다같이 외식!)"></textarea>
-      <div class="notice-add-row2">
-        <label class="notice-pin-toggle"><input type="checkbox" id="notice-pin"> <span>📌 상단 고정</span></label>
-        <button type="submit" class="btn btn-pin btn-small">올리기</button>
+  <div class="app-header-sticky">
+    <header class="app-header">
+      <div class="header-left">
+        <span class="brand-small">우리집</span>
+        <span class="family-name" id="family-name-label"></span>
       </div>
-    </form>
-    <div id="notice-list" class="notice-list"></div>
-  </section>
+      <button id="btn-notif" class="icon-btn" title="알림 켜기" aria-label="알림 켜기">🔔</button>
+    </header>
 
-  <!-- CALENDAR TAB -->
-  <section id="tab-calendar" class="tab-panel hidden">
+    <!-- MINI NOTICE BANNER (always visible, on top of every tab) -->
+    <button id="notice-banner" class="notice-banner hidden">
+      <span class="notice-banner-emoji">📢</span>
+      <span id="notice-banner-text" class="notice-banner-text"></span>
+      <span class="notice-banner-arrow">›</span>
+    </button>
+  </div>
+
+  <!-- CALENDAR TAB (home) -->
+  <section id="tab-calendar" class="tab-panel">
     <div class="view-toggle">
       <button class="view-btn active" data-view="calendar">📅 캘린더</button>
       <button class="view-btn" data-view="list">📋 리스트</button>
@@ -222,17 +216,14 @@
   </section>
 
   <nav class="bottom-nav">
-    <button class="nav-btn active" data-tab="notice">
-      <span class="nav-icon">📢</span><span>공지</span>
-    </button>
-    <button class="nav-btn" data-tab="calendar">
+    <button class="nav-btn active" data-tab="calendar">
       <span class="nav-icon">📅</span><span>캘린더</span>
     </button>
     <button class="nav-btn" data-tab="request">
       <span class="nav-icon">🙋</span><span>요청</span>
     </button>
     <button class="nav-btn" data-tab="family">
-      <span class="nav-icon">👪</span><span>가족</span>
+      <span class="nav-icon">⚙️</span><span>설정</span>
     </button>
   </nav>
 </div>
@@ -432,6 +423,24 @@
   </div>
 </div>
 
+<!-- NOTICE BOARD MODAL (opened from the mini banner) -->
+<div id="modal-notice" class="modal-overlay hidden">
+  <div class="modal-card modal-card-tall">
+    <div class="modal-header">
+      <h3>가족 공지</h3>
+      <button id="modal-notice-close" class="icon-btn" aria-label="닫기">✕</button>
+    </div>
+    <form id="form-notice-add" class="notice-add">
+      <textarea id="notice-text" rows="2" placeholder="가족에게 한마디… (예: 오늘 저녁 7시 다같이 외식!)"></textarea>
+      <div class="notice-add-row2">
+        <label class="notice-pin-toggle"><input type="checkbox" id="notice-pin"> <span>📌 상단 고정</span></label>
+        <button type="submit" class="btn btn-pin btn-small">올리기</button>
+      </div>
+    </form>
+    <div id="notice-list" class="notice-list modal-scroll"></div>
+  </div>
+</div>
+
 <!-- CHANGE FAMILY PASSWORD MODAL -->
 <div id="modal-password" class="modal-overlay hidden">
   <div class="modal-card">
@@ -470,6 +479,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 
 <script src="firebase-config.js"></script>
-<script src="app.js?v=1"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

@@ -163,15 +163,37 @@ button, input, select, textarea { font-family: inherit; }
 
 /* ===== App shell ===== */
 #screen-app { display: block; padding: 0; min-height: 100dvh; }
-.app-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 18px 12px;
+.app-header-sticky {
   position: sticky; top: 0; z-index: 5;
   background: rgba(255,247,251,0.72);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
+.app-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px 12px;
+}
 .header-left { display: flex; flex-direction: column; }
 .family-name { font-size: 12px; color: var(--ink-soft); font-family: var(--font-mono); }
+
+/* Mini notice banner, stuck to the header so it's visible above every tab */
+.notice-banner {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border: none; background: rgba(255,143,179,0.14); color: var(--ink);
+  padding: 9px 16px; margin: 0; cursor: pointer; text-align: left;
+  font-family: inherit; font-size: 12.5px;
+}
+.notice-banner-emoji { flex: 0 0 auto; font-size: 14px; }
+.notice-banner-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.notice-banner-arrow { flex: 0 0 auto; color: var(--ink-soft); }
+.notice-banner:active { background: rgba(255,143,179,0.24); }
+
+/* Member-row grouping (day panel + list view): one header per family member, like a wall calendar */
+.member-group-header {
+  display: flex; align-items: center; gap: 8px;
+  margin: 16px 0 7px; font-size: 13px; font-weight: 700; color: var(--ink-soft);
+}
+.member-group-header:first-child { margin-top: 0; }
+.member-group-header .avatar-dot { width: 21px; height: 21px; font-size: 9.5px; }
 
 .tab-panel { padding: 0 16px 100px; max-width: 640px; margin: 0 auto; }
 
@@ -445,6 +467,11 @@ button, input, select, textarea { font-family: inherit; }
 }
 .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .modal-header h3 { font-family: var(--font-display); font-size: 19px; margin: 0; }
+
+/* Notice board modal: header + compose stay put, only the notice list scrolls */
+.modal-card-tall { max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; }
+.modal-card-tall .modal-header, .modal-card-tall #form-notice-add { flex: 0 0 auto; }
+.modal-card-tall .modal-scroll { flex: 1 1 auto; overflow-y: auto; margin: 14px -18px 0; padding: 0 18px calc(4px + env(safe-area-inset-bottom)); }
 .field-label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-soft); margin: 10px 0 5px; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; }
 .checkbox-row input { width: 16px; height: 16px; }
