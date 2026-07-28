@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 
@@ -82,8 +82,10 @@
   <!-- CALENDAR TAB (home) -->
   <section id="tab-calendar" class="tab-panel">
     <div class="view-toggle">
-      <button class="view-btn active" data-view="calendar">📅 캘린더</button>
-      <button class="view-btn" data-view="list">📋 리스트</button>
+      <button class="view-btn active" data-view="calendar">📅 월간</button>
+      <button class="view-btn" data-view="week">📆 주간</button>
+      <button class="view-btn" data-view="day">📋 일간</button>
+      <button class="view-btn" data-view="list">🗒️ 리스트</button>
     </div>
 
     <div id="cal-view">
@@ -102,12 +104,36 @@
           <h3 id="day-panel-date">오늘</h3>
           <button id="btn-add-event" class="btn btn-secondary btn-small">자세히</button>
         </div>
-        <form id="form-quick-event" class="shopping-add-row">
+        <div id="day-events-list" class="events-list"></div>
+        <form id="form-quick-event" class="shopping-add-row quick-event-row">
           <input type="text" id="quick-event-title" placeholder="빠른 일정 추가 (예: 태권도, 학원)">
           <button type="submit" class="btn btn-pin btn-small">추가</button>
         </form>
-        <div id="day-events-list" class="events-list"></div>
       </div>
+    </div>
+
+    <!-- WEEK VIEW: dates as columns, family members as rows (like a wall calendar) -->
+    <div id="week-view" class="hidden">
+      <div class="cal-controls">
+        <button id="week-prev" class="icon-btn" aria-label="이전 주">‹</button>
+        <h2 id="week-label" class="cal-month-label"></h2>
+        <button id="week-next" class="icon-btn" aria-label="다음 주">›</button>
+      </div>
+      <div id="week-grid-wrap"></div>
+    </div>
+
+    <!-- DAY VIEW: single date column, family members as rows -->
+    <div id="day-view" class="hidden">
+      <div class="cal-controls">
+        <button id="day-view-prev" class="icon-btn" aria-label="이전 날">‹</button>
+        <h2 id="day-view-label" class="cal-month-label"></h2>
+        <button id="day-view-next" class="icon-btn" aria-label="다음 날">›</button>
+      </div>
+      <div id="day-grid-wrap"></div>
+      <form id="form-quick-event-day" class="shopping-add-row quick-event-row">
+        <input type="text" id="quick-event-title-day" placeholder="빠른 일정 추가 (예: 태권도, 학원)">
+        <button type="submit" class="btn btn-pin btn-small">추가</button>
+      </form>
     </div>
 
     <div id="list-view" class="hidden">
@@ -479,6 +505,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 
 <script src="firebase-config.js"></script>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

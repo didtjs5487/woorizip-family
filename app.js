@@ -565,7 +565,7 @@ function renderCalendar() {
     });
     grid.appendChild(cell);
   }
-  if (isListView()) renderEventList();
+  refreshActiveCalSubView();
 }
 
 function colorForAssignee(assignee) {
@@ -665,19 +665,140 @@ function renderDayPanel() {
   renderGroupedItemCards(list, dayEvents, dayTasks);
 }
 
-/* ===================== Calendar / List view toggle (per-device) ===================== */
-function isListView() { return localStorage.getItem('calView') === 'list'; }
+/* ===================== Calendar / Week / Day / List view toggle (per-device) ===================== */
 function applyCalView(view) {
   localStorage.setItem('calView', view);
   document.getElementById('cal-view').classList.toggle('hidden', view !== 'calendar');
+  document.getElementById('week-view').classList.toggle('hidden', view !== 'week');
+  document.getElementById('day-view').classList.toggle('hidden', view !== 'day');
   document.getElementById('list-view').classList.toggle('hidden', view !== 'list');
   document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  if (view === 'week') weekViewAnchor = state.selectedDate; // jump to whichever week the selected date is in
+  refreshActiveCalSubView();
+}
+function refreshActiveCalSubView() {
+  const view = localStorage.getItem('calView') || 'calendar';
   if (view === 'list') renderEventList();
+  else if (view === 'week') renderWeekView();
+  else if (view === 'day') renderDayGridView();
 }
 document.querySelectorAll('.view-btn').forEach(btn => {
   btn.addEventListener('click', () => applyCalView(btn.dataset.view));
 });
 document.getElementById('btn-add-event-list').addEventListener('click', () => openEventModal(null));
+
+function shiftDate(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
+/* ---- Week/Day grid views: dates as columns, family members as rows (like a wall calendar) ---- */
+let weekViewAnchor = todayStr();
+
+function weekDatesFor(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = dt.getDay();
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(dt); monday.setDate(dt.getDate() + mondayOffset);
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const d2 = new Date(monday); d2.setDate(monday.getDate() + i);
+    out.push(`${d2.getFullYear()}-${pad2(d2.getMonth() + 1)}-${pad2(d2.getDate())}`);
+  }
+  return out;
+}
+
+function scheduleRows() {
+  const rows = [{ key: 'all', label: '전체', emoji: '👪', colorHex: '#B9AE94' }];
+  Object.entries(state.members)
+    .sort((a, b) => (a[1].colorIndex ?? 0) - (b[1].colorIndex ?? 0))
+    .forEach(([mid, m]) => rows.push({ key: mid, label: m.name, emoji: null, colorHex: colorFor(m.colorIndex) }));
+  return rows;
+}
+
+function itemsForRowOnDate(rowKey, dateStr) {
+  const matches = (assignee) => rowKey === 'all' ? (assignee === 'all' || !assignee) : assignee === rowKey;
+  const evs = eventsOnDate(dateStr).filter(e => matches(e.assignee))
+    .sort((a, b) => (a.allDay ? '' : a.startTime || '').localeCompare(b.allDay ? '' : b.startTime || ''));
+  const tasks = tasksOnDate(dateStr).filter(t => matches(t.assignee));
+  return { evs, tasks };
+}
+
+function renderScheduleGrid(container, dates) {
+  const rows = scheduleRows();
+  let html = '<div class="sched-grid-scroll"><table class="sched-grid"><thead><tr><th class="sched-corner"></th>';
+  dates.forEach(d => {
+    const [, mo, da] = d.split('-').map(Number);
+    const wd = weekdayOf(d);
+    const isToday = d === todayStr();
+    const annivMatch = Object.values(state.anniversaries).find(a => a.month === mo && a.day === da);
+    const annivBadge = annivMatch ? `<span class="sched-anniv">${annivMatch.type === 'birthday' ? '🎂' : '🎉'}</span>` : '';
+    html += `<th class="sched-date-th${isToday ? ' today' : ''}" data-date="${d}"><span class="sched-date-num">${da}</span><span class="sched-date-wd">${WEEKDAYS_KO[wd]}</span>${annivBadge}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  rows.forEach(row => {
+    html += `<tr><th class="sched-row-label"><span class="avatar-dot" style="background:${row.colorHex}">${row.emoji || initialsFor(row.label)}</span><span>${escapeHtml(row.label)}</span></th>`;
+    dates.forEach(d => {
+      const { evs, tasks } = itemsForRowOnDate(row.key, d);
+      let cellHtml = '';
+      evs.forEach(ev => {
+        const timeLabel = ev.allDay || !ev.startTime ? '' : `${ev.startTime} `;
+        cellHtml += `<span class="sched-item" data-ev="${ev.id}">${escapeHtml(timeLabel + ev.title)}</span>`;
+      });
+      tasks.forEach(t => {
+        cellHtml += `<span class="sched-item sched-item-task${t.done ? ' done' : ''}" data-task="${t.id}">${escapeHtml(t.title)}</span>`;
+      });
+      html += `<td class="sched-cell" data-date="${d}" data-row="${row.key}">${cellHtml}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+
+  container.querySelectorAll('.sched-item[data-ev]').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); const ev = state.events[el.dataset.ev]; if (ev) openEventModal(ev); });
+  });
+  container.querySelectorAll('.sched-item[data-task]').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); const t = state.tasks[el.dataset.task]; if (t) openTaskModal(t); });
+  });
+  container.querySelectorAll('.sched-cell').forEach(el => {
+    el.addEventListener('dblclick', () => { state.selectedDate = el.dataset.date; openEventModal(null); });
+  });
+  container.querySelectorAll('.sched-date-th').forEach(el => {
+    el.addEventListener('click', () => { state.selectedDate = el.dataset.date; applyCalView('day'); });
+  });
+}
+
+function renderWeekView() {
+  const dates = weekDatesFor(weekViewAnchor);
+  const [sy, sm, sd] = dates[0].split('-').map(Number);
+  const [, em, ed] = dates[6].split('-').map(Number);
+  document.getElementById('week-label').textContent =
+    sm === em ? `${sy}. ${MONTHS_KO[sm - 1]} ${sd}~${ed}일` : `${MONTHS_KO[sm - 1]} ${sd}일 ~ ${MONTHS_KO[em - 1]} ${ed}일`;
+  renderScheduleGrid(document.getElementById('week-grid-wrap'), dates);
+}
+document.getElementById('week-prev').addEventListener('click', () => { weekViewAnchor = shiftDate(weekViewAnchor, -7); renderWeekView(); });
+document.getElementById('week-next').addEventListener('click', () => { weekViewAnchor = shiftDate(weekViewAnchor, 7); renderWeekView(); });
+
+function renderDayGridView() {
+  const d = state.selectedDate;
+  const [, mo, da] = d.split('-').map(Number);
+  document.getElementById('day-view-label').textContent =
+    `${mo}월 ${da}일 (${WEEKDAYS_KO[weekdayOf(d)]})` + (d === todayStr() ? ' · 오늘' : '');
+  renderScheduleGrid(document.getElementById('day-grid-wrap'), [d]);
+}
+document.getElementById('day-view-prev').addEventListener('click', () => {
+  state.selectedDate = shiftDate(state.selectedDate, -1);
+  renderDayGridView(); renderCalendar(); renderDayPanel();
+});
+document.getElementById('day-view-next').addEventListener('click', () => {
+  state.selectedDate = shiftDate(state.selectedDate, 1);
+  renderDayGridView(); renderCalendar(); renderDayPanel();
+});
 
 function renderEventList() {
   const wrap = document.getElementById('event-list-upcoming');
@@ -970,10 +1091,8 @@ document.getElementById('btn-delete-event').addEventListener('click', async () =
 });
 
 /* Quick add: type a title on the day panel → all-day event on the selected date */
-document.getElementById('form-quick-event').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const input = document.getElementById('quick-event-title');
-  const title = input.value.trim();
+async function quickAddEvent(rawTitle) {
+  const title = rawTitle.trim();
   if (!title) return;
   try {
     await db.collection('families').doc(state.familyId).collection('events').add({
@@ -981,8 +1100,19 @@ document.getElementById('form-quick-event').addEventListener('submit', async (e)
       assignee: 'all', notes: null, repeat: 'none', weekdays: [], repeatUntil: null,
       createdBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    input.value = '';
   } catch (err) { toast('추가 실패: ' + (err.code || err.message)); }
+}
+document.getElementById('form-quick-event').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('quick-event-title');
+  await quickAddEvent(input.value);
+  input.value = '';
+});
+document.getElementById('form-quick-event-day').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('quick-event-title-day');
+  await quickAddEvent(input.value);
+  input.value = '';
 });
 
 /* ===================== Tasks (chores) ===================== */
@@ -1429,7 +1559,8 @@ function renderNoticeBanner() {
     return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
   });
   if (items.length === 0) {
-    banner.classList.add('hidden');
+    document.getElementById('notice-banner-text').textContent = '가족에게 한마디를 남겨보세요 💌';
+    banner.classList.remove('hidden');
     return;
   }
   const top = items[0];
