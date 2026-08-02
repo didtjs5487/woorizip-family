@@ -616,6 +616,10 @@ function renderCalendar() {
         renderCalendar();
       }
       calSuppressNextClick = true;
+    } else if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      dragState.triggered = true;
+      shiftMonth(dx < 0 ? 1 : -1); // swipe left -> next month, swipe right -> previous month
+      calSuppressNextClick = true;
     }
   });
   ['pointerup', 'pointercancel'].forEach(evt => zone.addEventListener(evt, () => { dragState = null; }));
