@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 
@@ -142,6 +142,19 @@
         <button id="btn-add-event-list" class="btn btn-pin btn-small">+ 일정 추가</button>
       </div>
       <div id="event-list-upcoming" class="events-list"></div>
+    </div>
+
+    <!-- FAB: tap + to choose 할 일 or 일정 -->
+    <div id="cal-fab-wrap" class="fab-wrap">
+      <div id="fab-menu" class="fab-menu hidden">
+        <button type="button" id="fab-add-task" class="fab-mini fab-mini-task">
+          <span class="fab-mini-label">할 일</span><span class="fab-mini-circle">✓</span>
+        </button>
+        <button type="button" id="fab-add-event" class="fab-mini fab-mini-event">
+          <span class="fab-mini-label">일정</span><span class="fab-mini-circle">📅</span>
+        </button>
+      </div>
+      <button type="button" id="fab-main" class="fab-main" aria-label="추가">+</button>
     </div>
   </section>
 
@@ -327,37 +340,41 @@
         </div>
       </div>
 
-      <div id="event-repeat-block">
-        <label class="field-label">반복</label>
-        <select id="event-repeat">
-          <option value="none">반복 안함</option>
-          <option value="daily">매일</option>
-          <option value="weekly">매주 (요일 선택)</option>
-          <option value="monthly">매월 (같은 날짜)</option>
-        </select>
-
-        <div id="event-weekdays" class="weekday-row hidden">
-          <label class="weekday-toggle"><input type="checkbox" value="0"><span>일</span></label>
-          <label class="weekday-toggle"><input type="checkbox" value="1"><span>월</span></label>
-          <label class="weekday-toggle"><input type="checkbox" value="2"><span>화</span></label>
-          <label class="weekday-toggle"><input type="checkbox" value="3"><span>수</span></label>
-          <label class="weekday-toggle"><input type="checkbox" value="4"><span>목</span></label>
-          <label class="weekday-toggle"><input type="checkbox" value="5"><span>금</span></label>
-          <label class="weekday-toggle"><input type="checkbox" value="6"><span>토</span></label>
-        </div>
-
-        <div id="event-until-row" class="hidden">
-          <label class="field-label">반복 종료일 (선택 · 비우면 계속)</label>
-          <input type="date" id="event-until">
-        </div>
-      </div>
-      <p class="hint-text hidden" id="event-repeat-disabled-hint">기간/여러 날짜 선택 시에는 반복을 함께 쓸 수 없어요.</p>
-
       <label class="field-label">담당</label>
       <select id="event-assignee"></select>
 
-      <label class="field-label">메모 (선택)</label>
-      <textarea id="event-notes" rows="2" placeholder="메모를 남겨보세요"></textarea>
+      <button type="button" id="event-more-toggle" class="more-options-toggle">옵션 더보기</button>
+
+      <div id="event-more-options" class="hidden">
+        <div id="event-repeat-block">
+          <label class="field-label">반복</label>
+          <select id="event-repeat">
+            <option value="none">반복 안함</option>
+            <option value="daily">매일</option>
+            <option value="weekly">매주 (요일 선택)</option>
+            <option value="monthly">매월 (같은 날짜)</option>
+          </select>
+
+          <div id="event-weekdays" class="weekday-row hidden">
+            <label class="weekday-toggle"><input type="checkbox" value="0"><span>일</span></label>
+            <label class="weekday-toggle"><input type="checkbox" value="1"><span>월</span></label>
+            <label class="weekday-toggle"><input type="checkbox" value="2"><span>화</span></label>
+            <label class="weekday-toggle"><input type="checkbox" value="3"><span>수</span></label>
+            <label class="weekday-toggle"><input type="checkbox" value="4"><span>목</span></label>
+            <label class="weekday-toggle"><input type="checkbox" value="5"><span>금</span></label>
+            <label class="weekday-toggle"><input type="checkbox" value="6"><span>토</span></label>
+          </div>
+
+          <div id="event-until-row" class="hidden">
+            <label class="field-label">반복 종료일 (선택 · 비우면 계속)</label>
+            <input type="date" id="event-until">
+          </div>
+        </div>
+        <p class="hint-text hidden" id="event-repeat-disabled-hint">기간/여러 날짜 선택 시에는 반복을 함께 쓸 수 없어요.</p>
+
+        <label class="field-label">메모 (선택)</label>
+        <textarea id="event-notes" rows="2" placeholder="메모를 남겨보세요"></textarea>
+      </div>
 
       <div class="modal-actions">
         <button type="button" id="btn-delete-event" class="btn btn-ghost hidden">삭제</button>
@@ -385,21 +402,25 @@
       <label class="field-label">마감일 (선택)</label>
       <input type="date" id="task-due">
 
-      <label class="field-label">반복</label>
-      <select id="task-repeat">
-        <option value="none">반복 안함</option>
-        <option value="daily">매일</option>
-        <option value="weekly">매주 (요일 선택)</option>
-      </select>
+      <button type="button" id="task-more-toggle" class="more-options-toggle">옵션 더보기</button>
 
-      <div id="task-weekdays" class="weekday-row hidden">
-        <label class="weekday-toggle"><input type="checkbox" value="0"><span>일</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="1"><span>월</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="2"><span>화</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="3"><span>수</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="4"><span>목</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="5"><span>금</span></label>
-        <label class="weekday-toggle"><input type="checkbox" value="6"><span>토</span></label>
+      <div id="task-more-options" class="hidden">
+        <label class="field-label">반복</label>
+        <select id="task-repeat">
+          <option value="none">반복 안함</option>
+          <option value="daily">매일</option>
+          <option value="weekly">매주 (요일 선택)</option>
+        </select>
+
+        <div id="task-weekdays" class="weekday-row hidden">
+          <label class="weekday-toggle"><input type="checkbox" value="0"><span>일</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="1"><span>월</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="2"><span>화</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="3"><span>수</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="4"><span>목</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="5"><span>금</span></label>
+          <label class="weekday-toggle"><input type="checkbox" value="6"><span>토</span></label>
+        </div>
       </div>
 
       <div class="modal-actions">
@@ -505,6 +526,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 
 <script src="firebase-config.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

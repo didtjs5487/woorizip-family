@@ -507,10 +507,14 @@ function repeatLabelFor(ev) {
   return '';
 }
 
+let calGridExpanded = false; // false = dots, true = drag-revealed text labels (like a phone calendar app)
+let calSuppressNextClick = false;
+
 function renderCalendar() {
   const grid = document.getElementById('cal-grid');
   document.getElementById('cal-month-label').textContent = `${state.viewYear}. ${MONTHS_KO[state.viewMonth]}`;
   grid.innerHTML = '';
+  grid.classList.toggle('expanded', calGridExpanded);
 
   const firstOfMonth = new Date(state.viewYear, state.viewMonth, 1);
   const startOffset = firstOfMonth.getDay(); // 0=Sun
@@ -538,21 +542,42 @@ function renderCalendar() {
       cell.appendChild(badge);
     }
 
-    const dots = document.createElement('div');
-    dots.className = 'cal-day-dots';
-    const dayDots = [
-      ...eventsOnDate(dateStr).map(ev => ({ assignee: ev.assignee, isTask: false })),
-      ...tasksOnDate(dateStr).map(t => ({ assignee: t.assignee, isTask: true })),
-    ].slice(0, 4);
-    dayDots.forEach(({ assignee, isTask }) => {
-      const dot = document.createElement('span');
-      dot.className = 'cal-dot' + (isTask ? ' cal-dot-task' : '');
-      dot.style.background = colorForAssignee(assignee);
-      dots.appendChild(dot);
-    });
-    cell.appendChild(dots);
+    const dayItems = [
+      ...eventsOnDate(dateStr).map(ev => ({ title: ev.title, assignee: ev.assignee, isTask: false, done: false })),
+      ...tasksOnDate(dateStr).map(t => ({ title: t.title, assignee: t.assignee, isTask: true, done: t.done })),
+    ];
+
+    if (calGridExpanded) {
+      const chips = document.createElement('div');
+      chips.className = 'cal-day-chips';
+      dayItems.slice(0, 3).forEach(({ title, assignee, done }) => {
+        const chip = document.createElement('span');
+        chip.className = 'cal-day-chip' + (done ? ' done' : '');
+        chip.style.borderColor = colorForAssignee(assignee);
+        chip.textContent = title;
+        chips.appendChild(chip);
+      });
+      if (dayItems.length > 3) {
+        const more = document.createElement('span');
+        more.className = 'cal-day-chip cal-day-chip-more';
+        more.textContent = `+${dayItems.length - 3}`;
+        chips.appendChild(more);
+      }
+      cell.appendChild(chips);
+    } else {
+      const dots = document.createElement('div');
+      dots.className = 'cal-day-dots';
+      dayItems.slice(0, 4).forEach(({ assignee, isTask }) => {
+        const dot = document.createElement('span');
+        dot.className = 'cal-dot' + (isTask ? ' cal-dot-task' : '');
+        dot.style.background = colorForAssignee(assignee);
+        dots.appendChild(dot);
+      });
+      cell.appendChild(dots);
+    }
 
     cell.addEventListener('click', () => {
+      if (calSuppressNextClick) { calSuppressNextClick = false; return; }
       state.selectedDate = dateStr;
       renderCalendar();
       renderDayPanel();
@@ -567,6 +592,30 @@ function renderCalendar() {
   }
   refreshActiveCalSubView();
 }
+
+/* Drag the month grid down to reveal full event text per day, drag up to collapse back to dots */
+(function initCalGridDrag() {
+  const grid = document.getElementById('cal-grid');
+  let dragState = null;
+  grid.addEventListener('pointerdown', (e) => {
+    dragState = { startY: e.clientY, startX: e.clientX, triggered: false };
+  });
+  grid.addEventListener('pointermove', (e) => {
+    if (!dragState || dragState.triggered) return;
+    const dy = e.clientY - dragState.startY;
+    const dx = e.clientX - dragState.startX;
+    if (Math.abs(dy) > 36 && Math.abs(dy) > Math.abs(dx)) {
+      dragState.triggered = true;
+      const wantExpanded = dy > 0;
+      if (wantExpanded !== calGridExpanded) {
+        calGridExpanded = wantExpanded;
+        renderCalendar();
+      }
+      calSuppressNextClick = true;
+    }
+  });
+  ['pointerup', 'pointercancel'].forEach(evt => grid.addEventListener(evt, () => { dragState = null; }));
+})();
 
 function colorForAssignee(assignee) {
   if (assignee === 'all' || !assignee) return '#B9AE94';
@@ -1024,9 +1073,44 @@ function openEventModal(ev) {
   document.getElementById('event-until').value = ev?.repeatUntil || '';
   syncRepeatRows();
   document.getElementById('btn-delete-event').classList.toggle('hidden', !ev);
+  const hasMoreOptionsData = !!(ev && ((ev.repeat && ev.repeat !== 'none') || ev.notes));
+  setMoreOptionsOpen('event', hasMoreOptionsData);
   modal.classList.remove('hidden');
 }
 function closeEventModal() { modal.classList.add('hidden'); state.editingEventId = null; }
+
+/* "옵션 더보기" toggles shared by the event/task modals */
+function setMoreOptionsOpen(kind, open) {
+  document.getElementById(`${kind}-more-options`).classList.toggle('hidden', !open);
+  const btn = document.getElementById(`${kind}-more-toggle`);
+  if (btn) btn.textContent = open ? '옵션 접기' : '옵션 더보기';
+}
+document.getElementById('event-more-toggle').addEventListener('click', () => {
+  const isOpen = !document.getElementById('event-more-options').classList.contains('hidden');
+  setMoreOptionsOpen('event', !isOpen);
+});
+document.getElementById('task-more-toggle').addEventListener('click', () => {
+  const isOpen = !document.getElementById('task-more-options').classList.contains('hidden');
+  setMoreOptionsOpen('task', !isOpen);
+});
+
+/* FAB: tap + to reveal 할 일 / 일정 quick-add choices */
+const fabWrap = document.getElementById('cal-fab-wrap');
+function setFabOpen(open) {
+  fabWrap.classList.toggle('open', open);
+  document.getElementById('fab-menu').classList.toggle('hidden', !open);
+}
+document.getElementById('fab-main').addEventListener('click', () => {
+  setFabOpen(!fabWrap.classList.contains('open'));
+});
+document.getElementById('fab-add-task').addEventListener('click', () => {
+  setFabOpen(false);
+  openTaskModal(null);
+});
+document.getElementById('fab-add-event').addEventListener('click', () => {
+  setFabOpen(false);
+  openEventModal(null);
+});
 
 document.getElementById('form-event').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1216,6 +1300,7 @@ function openTaskModal(t) {
   renderAssigneeOptions();
   document.getElementById('task-assignee').value = t?.assignee || 'all';
   document.getElementById('btn-delete-task').classList.toggle('hidden', !t);
+  setMoreOptionsOpen('task', !!(t && t.repeat && t.repeat !== 'none'));
   taskModal.classList.remove('hidden');
 }
 function closeTaskModal() { taskModal.classList.add('hidden'); state.editingTaskId = null; }
