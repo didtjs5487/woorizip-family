@@ -693,33 +693,151 @@ function buildEventCard(ev) {
   return card;
 }
 
+let dayPanelMode = localStorage.getItem('dayPanelMode') === 'timeline' ? 'timeline' : 'list';
+
+function setDayPanelMode(mode) {
+  dayPanelMode = mode;
+  localStorage.setItem('dayPanelMode', mode);
+  document.getElementById('day-events-list').classList.toggle('hidden', mode !== 'list');
+  document.getElementById('day-timeline').classList.toggle('hidden', mode !== 'timeline');
+  const toggle = document.getElementById('day-panel-mode-toggle');
+  toggle.textContent = mode === 'list' ? '🕐' : '📋';
+  toggle.setAttribute('aria-label', mode === 'list' ? '시간대 보기로 전환' : '목록 보기로 전환');
+  renderDayPanel();
+}
+document.getElementById('day-panel-mode-toggle').addEventListener('click', () => {
+  setDayPanelMode(dayPanelMode === 'list' ? 'timeline' : 'list');
+});
+document.getElementById('day-events-list').classList.toggle('hidden', dayPanelMode !== 'list');
+document.getElementById('day-timeline').classList.toggle('hidden', dayPanelMode !== 'timeline');
+document.getElementById('day-panel-mode-toggle').textContent = dayPanelMode === 'list' ? '🕐' : '📋';
+
 function renderDayPanel() {
   const [y,mo,da] = state.selectedDate.split('-').map(Number);
   const d = new Date(y, mo-1, da);
   const label = `${mo}월 ${da}일 (${WEEKDAYS_KO[d.getDay()]})` + (state.selectedDate === todayStr() ? ' · 오늘' : '');
   document.getElementById('day-panel-date').textContent = label;
 
-  const list = document.getElementById('day-events-list');
-  list.innerHTML = '';
-
   const [sy, smo, sda] = state.selectedDate.split('-').map(Number);
   const dayAnniversaries = Object.values(state.anniversaries).filter(a => a.month === smo && a.day === sda);
+  const dayEvents = eventsOnDate(state.selectedDate)
+    .sort((a,b) => (a.allDay ? '' : a.startTime||'').localeCompare(b.allDay ? '' : b.startTime||''));
+  const dayTasks = tasksOnDate(state.selectedDate);
+
+  if (dayPanelMode === 'timeline') {
+    renderDayTimeline(state.selectedDate, dayEvents, dayTasks, dayAnniversaries);
+    return;
+  }
+
+  const list = document.getElementById('day-events-list');
+  list.innerHTML = '';
   dayAnniversaries.forEach(a => {
     const card = document.createElement('div');
     card.className = 'day-card-anniversary';
     card.textContent = `${a.type === 'birthday' ? '🎂' : '🎉'} ${a.title}`;
     list.appendChild(card);
   });
-
-  const dayEvents = eventsOnDate(state.selectedDate)
-    .sort((a,b) => (a.allDay ? '' : a.startTime||'').localeCompare(b.allDay ? '' : b.startTime||''));
-  const dayTasks = tasksOnDate(state.selectedDate);
-
   if (dayEvents.length === 0 && dayTasks.length === 0) {
     if (dayAnniversaries.length === 0) list.innerHTML += '<p class="empty-state">이 날은 일정이 없어요.</p>';
     return;
   }
   renderGroupedItemCards(list, dayEvents, dayTasks);
+}
+
+/* ---- Timeline mode: hour-by-hour axis with events plotted by start/end time ---- */
+const TIMELINE_ROW_HEIGHT = 48; // px per hour
+
+function timeStrToMinutes(t) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/* Greedy column assignment so overlapping events sit side-by-side instead of stacking */
+function layoutTimelineEvents(entries) {
+  const arr = entries.map(e => ({ ...e }));
+  arr.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+  const active = [];
+  arr.forEach(it => {
+    for (let i = active.length - 1; i >= 0; i--) if (active[i].endMin <= it.startMin) active.splice(i, 1);
+    const usedCols = new Set(active.map(a => a.col));
+    let col = 0; while (usedCols.has(col)) col++;
+    it.col = col;
+    active.push({ endMin: it.endMin, col });
+  });
+  arr.forEach(it => {
+    let maxCol = it.col;
+    arr.forEach(other => { if (other.startMin < it.endMin && other.endMin > it.startMin) maxCol = Math.max(maxCol, other.col); });
+    it.totalCols = maxCol + 1;
+  });
+  return arr;
+}
+
+function renderDayTimeline(dateStr, dayEvents, dayTasks, dayAnniversaries) {
+  const alldayWrap = document.getElementById('day-timeline-allday');
+  alldayWrap.innerHTML = '<span class="day-timeline-allday-label">종일</span>';
+  const alldayItems = [
+    ...dayAnniversaries.map(a => ({ title: `${a.type === 'birthday' ? '🎂' : '🎉'} ${a.title}`, colorHex: '#B9AE94', onClick: null })),
+    ...dayEvents.filter(ev => ev.allDay).map(ev => ({ title: ev.title, colorHex: colorForAssignee(ev.assignee), onClick: () => openEventModal(ev) })),
+    ...dayTasks.map(t => ({ title: t.title, colorHex: colorForAssignee(t.assignee), done: t.done, onClick: () => openTaskModal(t) })),
+  ];
+  alldayItems.forEach(({ title, colorHex, onClick, done }) => {
+    const chip = document.createElement('span');
+    chip.className = 'day-timeline-chip' + (done ? ' done' : '');
+    chip.style.borderLeftColor = colorHex;
+    chip.textContent = title;
+    if (onClick) chip.addEventListener('click', onClick);
+    alldayWrap.appendChild(chip);
+  });
+
+  const grid = document.getElementById('day-timeline-grid');
+  grid.innerHTML = '';
+  grid.style.height = (24 * TIMELINE_ROW_HEIGHT) + 'px';
+  for (let h = 0; h < 24; h++) {
+    const row = document.createElement('div');
+    row.className = 'day-timeline-hour';
+    row.style.top = (h * TIMELINE_ROW_HEIGHT) + 'px';
+    row.innerHTML = `<span class="day-timeline-hour-label">${pad2(h)}:00</span>`;
+    grid.appendChild(row);
+  }
+
+  const timedEvents = dayEvents.filter(ev => !ev.allDay && ev.startTime);
+  const laidOut = layoutTimelineEvents(timedEvents.map(ev => {
+    const startMin = timeStrToMinutes(ev.startTime);
+    const endMin = ev.endTime ? Math.max(timeStrToMinutes(ev.endTime), startMin + 20) : startMin + 40;
+    return { ev, startMin, endMin };
+  }));
+  const laneWidth = Math.max(grid.clientWidth - 56, 60);
+  laidOut.forEach(({ ev, startMin, endMin, col, totalCols }) => {
+    const colWidth = laneWidth / totalCols;
+    const block = document.createElement('div');
+    block.className = 'day-timeline-block';
+    block.style.top = (startMin / 60 * TIMELINE_ROW_HEIGHT) + 'px';
+    block.style.height = ((endMin - startMin) / 60 * TIMELINE_ROW_HEIGHT - 2) + 'px';
+    block.style.left = (56 + col * colWidth) + 'px';
+    block.style.width = (colWidth - 4) + 'px';
+    block.style.background = colorForAssignee(ev.assignee);
+    block.innerHTML = `<span class="day-timeline-block-time">${ev.startTime}</span><span class="day-timeline-block-title">${escapeHtml(ev.title)}</span>`;
+    block.addEventListener('click', () => openEventModal(ev));
+    grid.appendChild(block);
+  });
+
+  if (dateStr === todayStr()) {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const line = document.createElement('div');
+    line.className = 'day-timeline-now';
+    line.style.top = (nowMin / 60 * TIMELINE_ROW_HEIGHT) + 'px';
+    grid.appendChild(line);
+  }
+
+  const scrollEl = document.getElementById('day-timeline-scroll');
+  let scrollMin = 8 * 60;
+  if (dateStr === todayStr()) {
+    scrollMin = Math.max(0, new Date().getHours() * 60 - 90);
+  } else if (laidOut.length) {
+    scrollMin = Math.max(0, Math.min(...laidOut.map(l => l.startMin)) - 60);
+  }
+  scrollEl.scrollTop = scrollMin / 60 * TIMELINE_ROW_HEIGHT;
 }
 
 /* Swipe the day panel left/right to jump to the next/previous day's schedule */

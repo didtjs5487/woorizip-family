@@ -241,6 +241,37 @@ button, input, select, textarea { font-family: inherit; }
 .day-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .day-panel-header h3 { font-family: var(--font-display); font-size: 19px; margin: 0; font-weight: 600; }
 
+/* ===== Day panel: timeline (hour-axis) mode ===== */
+.day-timeline-allday { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; min-height: 24px; }
+.day-timeline-allday-label { font-size: 11px; font-weight: 700; color: var(--ink-soft); margin-right: 2px; }
+.day-timeline-chip {
+  font-size: 11.5px; font-weight: 600; background: var(--card); border: 1px solid var(--border);
+  border-left: 3px solid var(--sage); border-radius: 6px; padding: 3px 8px; cursor: pointer;
+}
+.day-timeline-chip.done { text-decoration: line-through; opacity: .55; }
+.day-timeline-scroll { max-height: 420px; overflow-y: auto; border-top: 1px solid var(--border); border-radius: var(--radius-sm); }
+.day-timeline-grid { position: relative; }
+.day-timeline-hour {
+  position: absolute; left: 0; right: 0; height: 48px;
+  border-top: 1px solid var(--border); box-sizing: border-box;
+}
+.day-timeline-hour-label {
+  position: absolute; top: -7px; left: 4px; width: 48px; font-size: 10.5px;
+  color: var(--ink-soft); font-family: var(--font-mono); background: var(--paper); padding-right: 4px;
+}
+.day-timeline-now { position: absolute; left: 56px; right: 4px; height: 2px; background: var(--danger); z-index: 3; }
+.day-timeline-now::before {
+  content: ''; position: absolute; left: -5px; top: -3px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--danger);
+}
+.day-timeline-block {
+  position: absolute; z-index: 2; border-radius: 6px; padding: 3px 6px; overflow: hidden;
+  cursor: pointer; color: #fff; box-shadow: 0 1px 4px rgba(43,42,40,.2);
+  display: flex; flex-direction: column; gap: 0;
+}
+.day-timeline-block-time { font-size: 9px; font-family: var(--font-mono); opacity: .9; line-height: 1.2; }
+.day-timeline-block-title { font-size: 11px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 .events-list { display: flex; flex-direction: column; gap: 10px; }
 .event-card {
   background: var(--card);
