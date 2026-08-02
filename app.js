@@ -386,7 +386,7 @@ function renderMembers() {
       </span>
     `;
     row.querySelector('.member-delete-btn').addEventListener('click', () => {
-      if (confirm(`"${m.name}" 구성원을 목록에서 삭제할까요?\n(등록했던 일정·할일은 남아있고, 중복된 기기 항목을 정리할 때 써요.)`)) {
+      if (confirm(`"${m.name}" 구성원을 목록에서 삭제할까요?\n(등록했던 일정·심부름은 남아있고, 중복된 기기 항목을 정리할 때 써요.)`)) {
         db.collection('families').doc(state.familyId).collection('members').doc(memberId).delete();
       }
     });
@@ -480,7 +480,7 @@ function eventsOnDate(dateStr) {
   return Object.values(state.events).filter(ev => eventOccursOn(ev, dateStr));
 }
 function taskOccursOn(t, dateStr) {
-  if (!t.dueDate) return false; // undated tasks only show in the 할일 tab
+  if (!t.dueDate) return false; // undated tasks only show in the 심부름 tab
   const repeat = t.repeat || 'none';
   if (repeat === 'none') return t.dueDate === dateStr;
   if (dateStr < t.dueDate) return false;
@@ -714,12 +714,11 @@ function renderDayPanel() {
   renderGroupedItemCards(list, dayEvents, dayTasks);
 }
 
-/* ===================== Calendar / Week / Day / List view toggle (per-device) ===================== */
+/* ===================== Calendar / Week / List view toggle (per-device) ===================== */
 function applyCalView(view) {
   localStorage.setItem('calView', view);
   document.getElementById('cal-view').classList.toggle('hidden', view !== 'calendar');
   document.getElementById('week-view').classList.toggle('hidden', view !== 'week');
-  document.getElementById('day-view').classList.toggle('hidden', view !== 'day');
   document.getElementById('list-view').classList.toggle('hidden', view !== 'list');
   document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   if (view === 'week') weekViewAnchor = state.selectedDate; // jump to whichever week the selected date is in
@@ -729,7 +728,6 @@ function refreshActiveCalSubView() {
   const view = localStorage.getItem('calView') || 'calendar';
   if (view === 'list') renderEventList();
   else if (view === 'week') renderWeekView();
-  else if (view === 'day') renderDayGridView();
 }
 document.querySelectorAll('.view-btn').forEach(btn => {
   btn.addEventListener('click', () => applyCalView(btn.dataset.view));
@@ -833,22 +831,6 @@ function renderWeekView() {
 document.getElementById('week-prev').addEventListener('click', () => { weekViewAnchor = shiftDate(weekViewAnchor, -7); renderWeekView(); });
 document.getElementById('week-next').addEventListener('click', () => { weekViewAnchor = shiftDate(weekViewAnchor, 7); renderWeekView(); });
 
-function renderDayGridView() {
-  const d = state.selectedDate;
-  const [, mo, da] = d.split('-').map(Number);
-  document.getElementById('day-view-label').textContent =
-    `${mo}월 ${da}일 (${WEEKDAYS_KO[weekdayOf(d)]})` + (d === todayStr() ? ' · 오늘' : '');
-  renderScheduleGrid(document.getElementById('day-grid-wrap'), [d]);
-}
-document.getElementById('day-view-prev').addEventListener('click', () => {
-  state.selectedDate = shiftDate(state.selectedDate, -1);
-  renderDayGridView(); renderCalendar(); renderDayPanel();
-});
-document.getElementById('day-view-next').addEventListener('click', () => {
-  state.selectedDate = shiftDate(state.selectedDate, 1);
-  renderDayGridView(); renderCalendar(); renderDayPanel();
-});
-
 function renderEventList() {
   const wrap = document.getElementById('event-list-upcoming');
   if (!wrap) return;
@@ -883,7 +865,10 @@ function renderEventList() {
     renderGroupedItemCards(wrap, evs, tasks);
   });
 }
-applyCalView(localStorage.getItem('calView') || 'calendar');
+{
+  const savedView = localStorage.getItem('calView');
+  applyCalView(['calendar', 'week', 'list'].includes(savedView) ? savedView : 'calendar');
+}
 
 /* ===================== Event modal ===================== */
 const modal = document.getElementById('modal-event');
@@ -1094,7 +1079,7 @@ document.getElementById('task-more-toggle').addEventListener('click', () => {
   setMoreOptionsOpen('task', !isOpen);
 });
 
-/* FAB: tap + to reveal 할 일 / 일정 quick-add choices */
+/* FAB: tap + to reveal 심부름 / 일정 quick-add choices */
 const fabWrap = document.getElementById('cal-fab-wrap');
 function setFabOpen(open) {
   fabWrap.classList.toggle('open', open);
@@ -1174,30 +1159,6 @@ document.getElementById('btn-delete-event').addEventListener('click', async () =
   closeEventModal();
 });
 
-/* Quick add: type a title on the day panel → all-day event on the selected date */
-async function quickAddEvent(rawTitle) {
-  const title = rawTitle.trim();
-  if (!title) return;
-  try {
-    await db.collection('families').doc(state.familyId).collection('events').add({
-      title, date: state.selectedDate, allDay: true, startTime: null, endTime: null,
-      assignee: 'all', notes: null, repeat: 'none', weekdays: [], repeatUntil: null,
-      createdBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-  } catch (err) { toast('추가 실패: ' + (err.code || err.message)); }
-}
-document.getElementById('form-quick-event').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const input = document.getElementById('quick-event-title');
-  await quickAddEvent(input.value);
-  input.value = '';
-});
-document.getElementById('form-quick-event-day').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const input = document.getElementById('quick-event-title-day');
-  await quickAddEvent(input.value);
-  input.value = '';
-});
 
 /* ===================== Tasks (chores) ===================== */
 document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -1252,7 +1213,7 @@ function renderTasks() {
   tasks.sort((a,b) => (a.done === b.done) ? 0 : (a.done ? 1 : -1));
 
   if (tasks.length === 0) {
-    list.innerHTML = '<p class="empty-state">할일이 없어요. 오른쪽 위 버튼으로 추가해보세요.</p>';
+    list.innerHTML = '<p class="empty-state">심부름이 없어요. 오른쪽 위 버튼으로 추가해보세요.</p>';
     return;
   }
   tasks.forEach(t => list.appendChild(buildTaskCard(t)));
@@ -1288,7 +1249,7 @@ document.getElementById('task-repeat').addEventListener('change', () => {
 
 function openTaskModal(t) {
   state.editingTaskId = t ? t.id : null;
-  document.getElementById('modal-task-title').textContent = t ? '할일 수정' : '할일 추가';
+  document.getElementById('modal-task-title').textContent = t ? '심부름 수정' : '심부름 추가';
   document.getElementById('task-title').value = t ? t.title : '';
   document.getElementById('task-due').value = t?.dueDate || '';
   document.getElementById('task-repeat').value = t?.repeat || 'none';
@@ -1320,7 +1281,7 @@ document.getElementById('form-task').addEventListener('submit', async (e) => {
     repeat,
     weekdays,
   };
-  if (!data.title) { errEl.textContent = '할일 내용을 입력해주세요.'; return; }
+  if (!data.title) { errEl.textContent = '심부름 내용을 입력해주세요.'; return; }
   if (repeat === 'weekly' && weekdays.length === 0) { errEl.textContent = '반복할 요일을 하나 이상 선택해주세요.'; return; }
   try {
     const col = db.collection('families').doc(state.familyId).collection('tasks');
@@ -1337,12 +1298,12 @@ document.getElementById('form-task').addEventListener('submit', async (e) => {
 
 document.getElementById('btn-delete-task').addEventListener('click', async () => {
   if (!state.editingTaskId) return;
-  if (!confirm('이 할일을 삭제할까요?')) return;
+  if (!confirm('이 심부름을 삭제할까요?')) return;
   await db.collection('families').doc(state.familyId).collection('tasks').doc(state.editingTaskId).delete();
   closeTaskModal();
 });
 
-/* ===================== Request tab: 할일 / 장보기 / 위시 sub-view toggle (per-device) ===================== */
+/* ===================== Request tab: 심부름 / 장보기 / 위시 sub-view toggle (per-device) ===================== */
 const GOODS_VIEWS = ['tasks', 'shopping', 'wish'];
 function applyGoodsView(view) {
   if (!GOODS_VIEWS.includes(view)) view = 'tasks';
@@ -1496,7 +1457,7 @@ document.getElementById('form-wish-add').addEventListener('submit', async (e) =>
   const input = document.getElementById('wish-title');
   const title = input.value.trim();
   if (!title) return;
-  const category = document.getElementById('wish-category').value;
+  const category = e.submitter?.dataset.wishCat || 'gift';
   try {
     await db.collection('families').doc(state.familyId).collection('wishes').add({
       title, category, done: false,
@@ -1619,7 +1580,7 @@ function renderNotices() {
       <div class="notice-foot">
         <span class="read-info">👀 ${readBy.length}/${memberCount} ${readAvatars}</span>
         <span class="notice-actions">
-          <button class="notice-mini todo">할일로</button>
+          <button class="notice-mini todo">심부름으로</button>
           ${unread > 0 ? '<button class="notice-mini nudge">콕 찌르기</button>' : ''}
           ${isAuthor ? `<button class="notice-mini pin">${n.pinned ? '고정해제' : '고정'}</button>` : ''}
           ${isAuthor ? '<button class="notice-mini del">삭제</button>' : ''}
