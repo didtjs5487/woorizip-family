@@ -595,16 +595,20 @@ function renderCalendar() {
 
 /* Drag the month grid down to reveal full event text per day, drag up to collapse back to dots */
 (function initCalGridDrag() {
-  const grid = document.getElementById('cal-grid');
+  // Whole calendar area (header + weekday row + grid) — not just the grid cells — so a
+  // drag started anywhere up there works. The day-panel below has its own left/right
+  // swipe (day navigation), so drags starting inside it are left alone.
+  const zone = document.getElementById('cal-view');
   let dragState = null;
-  grid.addEventListener('pointerdown', (e) => {
+  zone.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#day-panel')) return;
     dragState = { startY: e.clientY, startX: e.clientX, triggered: false };
   });
-  grid.addEventListener('pointermove', (e) => {
+  zone.addEventListener('pointermove', (e) => {
     if (!dragState || dragState.triggered) return;
     const dy = e.clientY - dragState.startY;
     const dx = e.clientX - dragState.startX;
-    if (Math.abs(dy) > 36 && Math.abs(dy) > Math.abs(dx)) {
+    if (Math.abs(dy) > 28 && Math.abs(dy) > Math.abs(dx)) {
       dragState.triggered = true;
       const wantExpanded = dy > 0;
       if (wantExpanded !== calGridExpanded) {
@@ -614,7 +618,7 @@ function renderCalendar() {
       calSuppressNextClick = true;
     }
   });
-  ['pointerup', 'pointercancel'].forEach(evt => grid.addEventListener(evt, () => { dragState = null; }));
+  ['pointerup', 'pointercancel'].forEach(evt => zone.addEventListener(evt, () => { dragState = null; }));
 })();
 
 function colorForAssignee(assignee) {
@@ -713,6 +717,29 @@ function renderDayPanel() {
   }
   renderGroupedItemCards(list, dayEvents, dayTasks);
 }
+
+/* Swipe the day panel left/right to jump to the next/previous day's schedule */
+(function initDayPanelSwipe() {
+  const panel = document.getElementById('day-panel');
+  let start = null;
+  panel.addEventListener('pointerdown', (e) => {
+    start = { x: e.clientX, y: e.clientY, triggered: false };
+  });
+  panel.addEventListener('pointermove', (e) => {
+    if (!start || start.triggered) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      start.triggered = true;
+      state.selectedDate = shiftDate(state.selectedDate, dx < 0 ? 1 : -1);
+      const [y, m] = state.selectedDate.split('-').map(Number);
+      state.viewYear = y; state.viewMonth = m - 1;
+      renderCalendar();
+      renderDayPanel();
+    }
+  });
+  ['pointerup', 'pointercancel'].forEach(evt => panel.addEventListener(evt, () => { start = null; }));
+})();
 
 /* ===================== Calendar / Week / List view toggle (per-device) ===================== */
 function applyCalView(view) {
@@ -872,7 +899,6 @@ function renderEventList() {
 
 /* ===================== Event modal ===================== */
 const modal = document.getElementById('modal-event');
-document.getElementById('btn-add-event').addEventListener('click', () => openEventModal(null));
 document.getElementById('modal-event-close').addEventListener('click', closeEventModal);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeEventModal(); });
 

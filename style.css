@@ -237,7 +237,7 @@ button, input, select, textarea { font-family: inherit; }
 .cal-day-chip.done { text-decoration: line-through; opacity: .5; }
 .cal-day-chip-more { text-align: center; color: var(--ink-soft); }
 
-.day-panel { margin-top: 22px; }
+.day-panel { margin-top: 22px; touch-action: pan-y; }
 .day-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .day-panel-header h3 { font-family: var(--font-display); font-size: 19px; margin: 0; font-weight: 600; }
 
