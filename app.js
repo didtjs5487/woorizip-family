@@ -47,7 +47,6 @@ const state = {
   members: {},          // memberId -> { name, colorIndex }
   tasks: {},             // taskId -> task data
   shopping: {},          // itemId -> shopping item data
-  shopFilter: 'all',
   wishes: {},            // wishId -> wishlist item data
   wishFilter: 'all',
   notices: {},           // noticeId -> notice data
@@ -55,7 +54,6 @@ const state = {
   anniversaries: {},     // annivId -> anniversary data
   editingTaskId: null,
   editingAnniversaryId: null,
-  taskFilter: 'all',
   unsubUser: null,
   unsubFamily: null,
   unsubMembers: null,
@@ -422,15 +420,6 @@ document.getElementById('task-more-toggle').addEventListener('click', () => {
 });
 
 /* ===================== Tasks (chores) ===================== */
-document.querySelectorAll('.filter-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.taskFilter = btn.dataset.filter;
-    renderTasks();
-  });
-});
-
 function buildTaskCard(t) {
   const card = document.createElement('div');
   card.className = 'task-card' + (t.done ? ' done' : '');
@@ -468,10 +457,8 @@ function renderTasks() {
   const list = document.getElementById('tasks-list');
   if (!list) return;
   list.innerHTML = '';
-  let tasks = Object.values(state.tasks);
-  if (state.taskFilter === 'mine') tasks = tasks.filter(t => t.assignee === state.memberId);
-  if (state.taskFilter === 'done') tasks = tasks.filter(t => t.done);
-  tasks.sort((a,b) => (a.done === b.done) ? 0 : (a.done ? 1 : -1));
+  const tasks = Object.values(state.tasks)
+    .sort((a,b) => (a.done === b.done) ? 0 : (a.done ? 1 : -1));
 
   if (tasks.length === 0) {
     list.innerHTML = '<p class="empty-state">집안일이 없어요. 오른쪽 위 버튼으로 추가해보세요.</p>';
@@ -570,9 +557,9 @@ function applyGoodsView(view) {
   if (!GOODS_VIEWS.includes(view)) view = 'tasks';
   localStorage.setItem('goodsView', view);
   GOODS_VIEWS.forEach(v => document.getElementById(`goods-view-${v}`).classList.toggle('hidden', v !== view));
-  document.querySelectorAll('.goods-view-btn').forEach(b => b.classList.toggle('active', b.dataset.goodsView === view));
+  document.querySelectorAll('.status-chip').forEach(b => b.classList.toggle('active', b.dataset.goodsView === view));
 }
-document.querySelectorAll('.goods-view-btn, .status-chip').forEach(btn => {
+document.querySelectorAll('.status-chip').forEach(btn => {
   btn.addEventListener('click', () => applyGoodsView(btn.dataset.goodsView));
 });
 applyGoodsView(localStorage.getItem('goodsView'));
@@ -585,16 +572,6 @@ function renderRequestStatus() {
 }
 
 /* ===================== Shopping / household supplies ===================== */
-const SHOP_CAT_EMOJI = { food: '🥦', daily: '🧻', etc: '📦' };
-
-document.querySelectorAll('.shop-filter').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.shop-filter').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.shopFilter = btn.dataset.sfilter;
-    renderShopping();
-  });
-});
 document.getElementById('shopping-more-toggle').addEventListener('click', () => {
   const isOpen = !document.getElementById('shopping-more-options').classList.contains('hidden');
   setMoreOptionsOpen('shopping', !isOpen);
@@ -605,9 +582,8 @@ function renderShopping() {
   const list = document.getElementById('shopping-list');
   if (!list) return;
   list.innerHTML = '';
-  let items = Object.values(state.shopping);
-  if (state.shopFilter && state.shopFilter !== 'all') items = items.filter(i => (i.category || 'etc') === state.shopFilter);
-  items.sort((a,b) => (a.purchased === b.purchased) ? 0 : (a.purchased ? 1 : -1));
+  const items = Object.values(state.shopping)
+    .sort((a,b) => (a.purchased === b.purchased) ? 0 : (a.purchased ? 1 : -1));
   if (items.length === 0) {
     list.innerHTML = '<p class="empty-state">사고 싶은 물건을 추가해보세요.</p>';
     return;
@@ -616,11 +592,9 @@ function renderShopping() {
     const row = document.createElement('div');
     row.className = 'shopping-item' + (item.purchased ? ' purchased' : '');
     const requesterName = state.members[item.requestedBy]?.name || '?';
-    const emoji = SHOP_CAT_EMOJI[item.category] || '📦';
     const priceLabel = item.price != null ? `${Number(item.price).toLocaleString('ko-KR')}원` : '';
     row.innerHTML = `
       <span class="task-checkbox ${item.purchased ? 'checked' : ''}">${item.purchased ? '✓' : ''}</span>
-      <span class="shopping-cat-emoji">${emoji}</span>
       <div class="shopping-body">
         <span class="shopping-name">${escapeHtml(item.name)}${item.qty ? ` <span class="shopping-qty">${escapeHtml(item.qty)}</span>` : ''}</span>
         ${(priceLabel || item.link) ? `<span class="shopping-sub">
@@ -655,14 +629,13 @@ document.getElementById('form-shopping-add').addEventListener('submit', async (e
   const linkInput = document.getElementById('shopping-item-link');
   const name = nameInput.value.trim();
   if (!name) return;
-  const category = e.submitter?.dataset.shopCat || 'etc';
   const qty = qtyInput.value.trim() || null;
   const priceRaw = priceInput.value.trim();
   const price = priceRaw ? Number(priceRaw) : null;
   let link = linkInput.value.trim() || null;
   if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
   await db.collection('families').doc(state.familyId).collection('shopping').add({
-    name, qty, category, price, link, purchased: false, requestedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    name, qty, price, link, purchased: false, requestedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
   nameInput.value = '';
   qtyInput.value = '';

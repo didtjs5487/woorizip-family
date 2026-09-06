@@ -197,11 +197,6 @@ button, input, select, textarea { font-family: inherit; }
 .section-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; margin: 0; }
 
 .filter-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-.filter-btn {
-  border: 1px solid var(--border); background: var(--card); color: var(--ink-soft);
-  border-radius: 20px; padding: 6px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
-}
-.filter-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 
 .task-card {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md);
@@ -229,13 +224,13 @@ button, input, select, textarea { font-family: inherit; }
   padding: 11px 14px; font-size: 15px;
 }
 .shopping-add-row .shopping-qty-input { flex: 0 0 96px; }
+.shopping-add-btn { align-self: flex-end; }
 .shopping-item {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md);
   padding: 12px 14px; display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow-pin);
 }
 .shopping-item.purchased { opacity: .5; }
 .shopping-item.purchased .shopping-name { text-decoration: line-through; }
-.shopping-cat-emoji { font-size: 17px; flex-shrink: 0; }
 .shopping-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .shopping-name { font-weight: 600; font-size: 14.5px; }
 .shopping-qty { font-weight: 500; font-size: 12.5px; color: var(--ink-soft); font-family: var(--font-mono); }
@@ -246,12 +241,6 @@ button, input, select, textarea { font-family: inherit; }
 .shopping-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); }
 .shopping-delete-btn { background: none; border: none; color: var(--ink-soft); font-size: 15px; line-height: 1; cursor: pointer; padding: 4px; }
 .shopping-delete-btn:active { color: var(--danger); }
-.shop-filter {
-  border: 1px solid var(--border); background: var(--paper-dim); color: var(--ink-soft);
-  border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
-}
-.shop-filter.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-
 /* ===== Wishlist ===== */
 .wish-hint { color: var(--ink-soft); font-size: 12.5px; margin: 0 0 12px; }
 .wish-add { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
@@ -334,17 +323,8 @@ button, input, select, textarea { font-family: inherit; }
 .notice-mini.nudge { color: #C25A82; border-color: #F3C3D6; }
 .notice-mini.del { color: var(--danger); }
 
-/* ===== View toggles (request sub-tabs) ===== */
-.view-toggle { display: flex; gap: 6px; background: var(--paper-dim); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
-.modal-card .view-toggle { margin: 6px 0 10px; }
-.goods-view-btn {
-  flex: 1; border: none; background: none; padding: 9px 4px; border-radius: 9px;
-  font-size: 12.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer; white-space: nowrap;
-}
-.goods-view-btn.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow-pin); }
-
-/* ===== Request tab status strip ===== */
-.request-status { display: flex; gap: 8px; margin-bottom: 14px; }
+/* ===== Request tab status strip (also the tab switcher) ===== */
+.request-status { display: flex; gap: 8px; margin-bottom: 18px; }
 .status-chip {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md);
@@ -352,6 +332,9 @@ button, input, select, textarea { font-family: inherit; }
 }
 .status-chip-count { font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--ink); }
 .status-chip-label { font-size: 11.5px; color: var(--ink-soft); }
+.status-chip.active { background: var(--ink); border-color: var(--ink); }
+.status-chip.active .status-chip-count,
+.status-chip.active .status-chip-label { color: var(--paper); }
 .anniversary-row { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer; }
 .anniversary-icon { font-size: 18px; }
 .anniversary-name { font-weight: 600; font-size: 14px; flex: 1; }
