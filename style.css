@@ -236,8 +236,13 @@ button, input, select, textarea { font-family: inherit; }
 .shopping-item.purchased { opacity: .5; }
 .shopping-item.purchased .shopping-name { text-decoration: line-through; }
 .shopping-cat-emoji { font-size: 17px; flex-shrink: 0; }
-.shopping-name { flex: 1; font-weight: 600; font-size: 14.5px; }
+.shopping-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.shopping-name { font-weight: 600; font-size: 14.5px; }
 .shopping-qty { font-weight: 500; font-size: 12.5px; color: var(--ink-soft); font-family: var(--font-mono); }
+.shopping-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.shopping-price { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--marigold); }
+.shopping-link { font-size: 12px; font-weight: 600; color: #4F8A82; text-decoration: none; }
+.shopping-link:active { opacity: .6; }
 .shopping-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); }
 .shopping-delete-btn { background: none; border: none; color: var(--ink-soft); font-size: 15px; line-height: 1; cursor: pointer; padding: 4px; }
 .shopping-delete-btn:active { color: var(--danger); }

@@ -595,6 +595,10 @@ document.querySelectorAll('.shop-filter').forEach(btn => {
     renderShopping();
   });
 });
+document.getElementById('shopping-more-toggle').addEventListener('click', () => {
+  const isOpen = !document.getElementById('shopping-more-options').classList.contains('hidden');
+  setMoreOptionsOpen('shopping', !isOpen);
+});
 
 function renderShopping() {
   renderRequestStatus();
@@ -613,11 +617,18 @@ function renderShopping() {
     row.className = 'shopping-item' + (item.purchased ? ' purchased' : '');
     const requesterName = state.members[item.requestedBy]?.name || '?';
     const emoji = SHOP_CAT_EMOJI[item.category] || '📦';
+    const priceLabel = item.price != null ? `${Number(item.price).toLocaleString('ko-KR')}원` : '';
     row.innerHTML = `
       <span class="task-checkbox ${item.purchased ? 'checked' : ''}">${item.purchased ? '✓' : ''}</span>
       <span class="shopping-cat-emoji">${emoji}</span>
-      <span class="shopping-name">${escapeHtml(item.name)}${item.qty ? ` <span class="shopping-qty">${escapeHtml(item.qty)}</span>` : ''}</span>
-      <span class="shopping-meta">${escapeHtml(requesterName)}님 요청</span>
+      <div class="shopping-body">
+        <span class="shopping-name">${escapeHtml(item.name)}${item.qty ? ` <span class="shopping-qty">${escapeHtml(item.qty)}</span>` : ''}</span>
+        ${(priceLabel || item.link) ? `<span class="shopping-sub">
+          ${priceLabel ? `<span class="shopping-price">${priceLabel}</span>` : ''}
+          ${item.link ? `<a class="shopping-link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">🔗 구매 링크</a>` : ''}
+        </span>` : ''}
+        <span class="shopping-meta">${escapeHtml(requesterName)}님 요청</span>
+      </div>
       <button class="shopping-delete-btn" title="삭제" aria-label="삭제">✕</button>
     `;
     row.querySelector('.task-checkbox').addEventListener('click', () => toggleShoppingPurchased(item));
@@ -640,15 +651,23 @@ document.getElementById('form-shopping-add').addEventListener('submit', async (e
   e.preventDefault();
   const nameInput = document.getElementById('shopping-item-name');
   const qtyInput = document.getElementById('shopping-item-qty');
+  const priceInput = document.getElementById('shopping-item-price');
+  const linkInput = document.getElementById('shopping-item-link');
   const name = nameInput.value.trim();
   if (!name) return;
   const category = e.submitter?.dataset.shopCat || 'etc';
   const qty = qtyInput.value.trim() || null;
+  const priceRaw = priceInput.value.trim();
+  const price = priceRaw ? Number(priceRaw) : null;
+  let link = linkInput.value.trim() || null;
+  if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
   await db.collection('families').doc(state.familyId).collection('shopping').add({
-    name, qty, category, purchased: false, requestedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    name, qty, category, price, link, purchased: false, requestedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
   nameInput.value = '';
   qtyInput.value = '';
+  priceInput.value = '';
+  linkInput.value = '';
 });
 
 /* ===================== Wishlist (먹고 싶은 것 · 받고 싶은 선물) ===================== */
