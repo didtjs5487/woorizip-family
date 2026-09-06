@@ -572,11 +572,6 @@ function renderRequestStatus() {
 }
 
 /* ===================== Shopping / household supplies ===================== */
-document.getElementById('shopping-more-toggle').addEventListener('click', () => {
-  const isOpen = !document.getElementById('shopping-more-options').classList.contains('hidden');
-  setMoreOptionsOpen('shopping', !isOpen);
-});
-
 function renderShopping() {
   renderRequestStatus();
   const list = document.getElementById('shopping-list');
