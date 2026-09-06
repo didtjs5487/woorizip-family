@@ -45,29 +45,23 @@ const state = {
   memberId: null,       // this device's family-member id (shared across devices with the same name)
   familyDoc: null,      // { name, inviteCode }
   members: {},          // memberId -> { name, colorIndex }
-  events: {},            // eventId -> event data
   tasks: {},             // taskId -> task data
   shopping: {},          // itemId -> shopping item data
+  shopFilter: 'all',
   wishes: {},            // wishId -> wishlist item data
   wishFilter: 'all',
   notices: {},           // noticeId -> notice data
   shownNudges: {},       // noticeId -> last nudge timestamp we already toasted
   anniversaries: {},     // annivId -> anniversary data
-  viewYear: new Date().getFullYear(),
-  viewMonth: new Date().getMonth(), // 0-indexed
-  selectedDate: todayStr(),
-  editingEventId: null,
   editingTaskId: null,
   editingAnniversaryId: null,
   taskFilter: 'all',
   unsubUser: null,
   unsubFamily: null,
   unsubMembers: null,
-  unsubEvents: null,
   unsubTasks: null,
   unsubShopping: null,
   unsubAnniversaries: null,
-  eventsLoadedOnce: false,
   notifiedAnniversaryToday: null,
 };
 
@@ -240,13 +234,11 @@ auth.onAuthStateChanged((user) => {
 function teardownFamilyListeners() {
   if (state.unsubFamily) { state.unsubFamily(); state.unsubFamily = null; }
   if (state.unsubMembers) { state.unsubMembers(); state.unsubMembers = null; }
-  if (state.unsubEvents) { state.unsubEvents(); state.unsubEvents = null; }
   if (state.unsubTasks) { state.unsubTasks(); state.unsubTasks = null; }
   if (state.unsubShopping) { state.unsubShopping(); state.unsubShopping = null; }
   if (state.unsubWishes) { state.unsubWishes(); state.unsubWishes = null; }
   if (state.unsubNotices) { state.unsubNotices(); state.unsubNotices = null; }
   if (state.unsubAnniversaries) { state.unsubAnniversaries(); state.unsubAnniversaries = null; }
-  state.eventsLoadedOnce = false;
 }
 
 function enterFamily(familyId) {
@@ -263,33 +255,6 @@ function enterFamily(familyId) {
       snap.forEach(doc => { state.members[doc.id] = doc.data(); });
       renderMembers();
       renderAssigneeOptions();
-      renderCalendar();
-      renderDayPanel();
-    });
-
-  state.unsubEvents = db.collection('families').doc(familyId).collection('events')
-    .orderBy('date')
-    .onSnapshot(snap => {
-      const wasLoaded = state.eventsLoadedOnce;
-      snap.docChanges().forEach(change => {
-        if (change.type === 'added') {
-          state.events[change.doc.id] = { id: change.doc.id, ...change.doc.data() };
-          if (wasLoaded && !change.doc.metadata.hasPendingWrites) {
-            const ev = state.events[change.doc.id];
-            const who = state.members[ev.createdBy]?.name || '가족';
-            if (ev.createdBy !== state.memberId) {
-              notifyUser(`${who}님이 일정을 추가했어요`, ev.title);
-            }
-          }
-        } else if (change.type === 'modified') {
-          state.events[change.doc.id] = { id: change.doc.id, ...change.doc.data() };
-        } else if (change.type === 'removed') {
-          delete state.events[change.doc.id];
-        }
-      });
-      state.eventsLoadedOnce = true;
-      renderCalendar();
-      renderDayPanel();
     });
 
   state.unsubTasks = db.collection('families').doc(familyId).collection('tasks')
@@ -297,8 +262,6 @@ function enterFamily(familyId) {
       state.tasks = {};
       snap.forEach(doc => { state.tasks[doc.id] = { id: doc.id, ...doc.data() }; });
       renderTasks();
-      renderCalendar();
-      renderDayPanel();
     });
 
   state.unsubShopping = db.collection('families').doc(familyId).collection('shopping')
@@ -347,14 +310,10 @@ function enterFamily(familyId) {
       state.anniversaries = {};
       snap.forEach(doc => { state.anniversaries[doc.id] = { id: doc.id, ...doc.data() }; });
       renderAnniversaries();
-      renderCalendar();
-      renderDayPanel();
       checkUpcomingAnniversaries();
     });
 
   showScreen('screen-app');
-  renderCalendar();
-  renderDayPanel();
 }
 
 /* ===================== Notifications ===================== */
@@ -386,7 +345,7 @@ function renderMembers() {
       </span>
     `;
     row.querySelector('.member-delete-btn').addEventListener('click', () => {
-      if (confirm(`"${m.name}" 구성원을 목록에서 삭제할까요?\n(등록했던 일정·심부름은 남아있고, 중복된 기기 항목을 정리할 때 써요.)`)) {
+      if (confirm(`"${m.name}" 구성원을 목록에서 삭제할까요?\n(등록했던 집안일·장보기·위시는 남아있고, 중복된 기기 항목을 정리할 때 써요.)`)) {
         db.collection('families').doc(state.familyId).collection('members').doc(memberId).delete();
       }
     });
@@ -434,737 +393,11 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-/* ===================== Calendar ===================== */
-document.getElementById('cal-prev').addEventListener('click', () => shiftMonth(-1));
-document.getElementById('cal-next').addEventListener('click', () => shiftMonth(1));
-function shiftMonth(delta) {
-  state.viewMonth += delta;
-  if (state.viewMonth < 0) { state.viewMonth = 11; state.viewYear--; }
-  if (state.viewMonth > 11) { state.viewMonth = 0; state.viewYear++; }
-  renderCalendar();
-}
-
-/* Recurrence: does an event occur on a given YYYY-MM-DD? */
-function weekdayOf(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d).getDay();
-}
-function eventOccursOn(ev, dateStr) {
-  if (ev.dates && ev.dates.length) return ev.dates.includes(dateStr);
-  if (ev.endDate) return dateStr >= ev.date && dateStr <= ev.endDate;
-  const repeat = ev.repeat || 'none';
-  if (repeat === 'none') return ev.date === dateStr;
-  if (dateStr < ev.date) return false;                       // before it starts
-  if (ev.repeatUntil && dateStr > ev.repeatUntil) return false; // after it ends
-  if (repeat === 'daily') return true;
-  if (repeat === 'weekly') {
-    const list = (ev.weekdays && ev.weekdays.length) ? ev.weekdays : [weekdayOf(ev.date)];
-    return list.includes(weekdayOf(dateStr));
-  }
-  if (repeat === 'monthly') {
-    return Number(dateStr.split('-')[2]) === Number(ev.date.split('-')[2]);
-  }
-  return false;
-}
-/* Multi-day label for cards: "7/20 ~ 7/22" for a range, "여러 날 (3일)" for picked dates */
-function multiDateLabelFor(ev) {
-  if (ev.dates && ev.dates.length > 1) return `여러 날 (${ev.dates.length}일)`;
-  if (ev.endDate && ev.endDate !== ev.date) {
-    const [, m1, d1] = ev.date.split('-');
-    const [, m2, d2] = ev.endDate.split('-');
-    return `${Number(m1)}/${Number(d1)} ~ ${Number(m2)}/${Number(d2)}`;
-  }
-  return '';
-}
-function eventsOnDate(dateStr) {
-  return Object.values(state.events).filter(ev => eventOccursOn(ev, dateStr));
-}
-function taskOccursOn(t, dateStr) {
-  if (!t.dueDate) return false; // undated tasks only show in the 심부름 tab
-  const repeat = t.repeat || 'none';
-  if (repeat === 'none') return t.dueDate === dateStr;
-  if (dateStr < t.dueDate) return false;
-  if (repeat === 'daily') return true;
-  if (repeat === 'weekly') {
-    const list = (t.weekdays && t.weekdays.length) ? t.weekdays : [weekdayOf(t.dueDate)];
-    return list.includes(weekdayOf(dateStr));
-  }
-  return false;
-}
-function tasksOnDate(dateStr) {
-  return Object.values(state.tasks).filter(t => taskOccursOn(t, dateStr));
-}
-function repeatLabelFor(ev) {
-  const repeat = ev.repeat || 'none';
-  if (repeat === 'daily') return '매일';
-  if (repeat === 'monthly') return '매월';
-  if (repeat === 'weekly') {
-    const list = (ev.weekdays && ev.weekdays.length) ? ev.weekdays : [weekdayOf(ev.date)];
-    const sorted = [...list].sort((a,b) => a - b);
-    if (sorted.length === 7) return '매일';
-    return '매주 ' + sorted.map(d => WEEKDAYS_KO[d]).join('·');
-  }
-  return '';
-}
-
-let calGridExpanded = false; // false = dots, true = drag-revealed text labels (like a phone calendar app)
-let calSuppressNextClick = false;
-
-function renderCalendar() {
-  const grid = document.getElementById('cal-grid');
-  document.getElementById('cal-month-label').textContent = `${state.viewYear}. ${MONTHS_KO[state.viewMonth]}`;
-  grid.innerHTML = '';
-  grid.classList.toggle('expanded', calGridExpanded);
-
-  const firstOfMonth = new Date(state.viewYear, state.viewMonth, 1);
-  const startOffset = firstOfMonth.getDay(); // 0=Sun
-  const gridStart = new Date(state.viewYear, state.viewMonth, 1 - startOffset);
-
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(gridStart);
-    d.setDate(gridStart.getDate() + i);
-    const dateStr = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-    const cell = document.createElement('div');
-    cell.className = 'cal-day';
-    if (d.getMonth() !== state.viewMonth) cell.classList.add('other-month');
-    if (dateStr === todayStr()) cell.classList.add('today');
-    if (dateStr === state.selectedDate) cell.classList.add('selected');
-
-    const num = document.createElement('span');
-    num.textContent = d.getDate();
-    cell.appendChild(num);
-
-    const annivMatch = Object.values(state.anniversaries).find(a => a.month === d.getMonth()+1 && a.day === d.getDate());
-    if (annivMatch) {
-      const badge = document.createElement('span');
-      badge.className = 'cal-day-badge';
-      badge.textContent = annivMatch.type === 'birthday' ? '🎂' : '🎉';
-      cell.appendChild(badge);
-    }
-
-    const dayItems = [
-      ...eventsOnDate(dateStr).map(ev => ({ title: ev.title, assignee: ev.assignee, isTask: false, done: false })),
-      ...tasksOnDate(dateStr).map(t => ({ title: t.title, assignee: t.assignee, isTask: true, done: t.done })),
-    ];
-
-    if (calGridExpanded) {
-      const chips = document.createElement('div');
-      chips.className = 'cal-day-chips';
-      dayItems.slice(0, 3).forEach(({ title, assignee, done }) => {
-        const chip = document.createElement('span');
-        chip.className = 'cal-day-chip' + (done ? ' done' : '');
-        chip.style.borderColor = colorForAssignee(assignee);
-        chip.textContent = title;
-        chips.appendChild(chip);
-      });
-      if (dayItems.length > 3) {
-        const more = document.createElement('span');
-        more.className = 'cal-day-chip cal-day-chip-more';
-        more.textContent = `+${dayItems.length - 3}`;
-        chips.appendChild(more);
-      }
-      cell.appendChild(chips);
-    } else {
-      const dots = document.createElement('div');
-      dots.className = 'cal-day-dots';
-      dayItems.slice(0, 4).forEach(({ assignee, isTask }) => {
-        const dot = document.createElement('span');
-        dot.className = 'cal-dot' + (isTask ? ' cal-dot-task' : '');
-        dot.style.background = colorForAssignee(assignee);
-        dots.appendChild(dot);
-      });
-      cell.appendChild(dots);
-    }
-
-    cell.addEventListener('click', () => {
-      if (calSuppressNextClick) { calSuppressNextClick = false; return; }
-      state.selectedDate = dateStr;
-      renderCalendar();
-      renderDayPanel();
-    });
-    cell.addEventListener('dblclick', () => {
-      state.selectedDate = dateStr;
-      renderCalendar();
-      renderDayPanel();
-      openEventModal(null);
-    });
-    grid.appendChild(cell);
-  }
-  refreshActiveCalSubView();
-}
-
-/* Drag the month grid down to reveal full event text per day, drag up to collapse back to dots */
-(function initCalGridDrag() {
-  // Whole calendar area (header + weekday row + grid) — not just the grid cells — so a
-  // drag started anywhere up there works. The day-panel below has its own left/right
-  // swipe (day navigation), so drags starting inside it are left alone.
-  const zone = document.getElementById('cal-view');
-  let dragState = null;
-  zone.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('#day-panel')) return;
-    dragState = { startY: e.clientY, startX: e.clientX, triggered: false };
-  });
-  zone.addEventListener('pointermove', (e) => {
-    if (!dragState || dragState.triggered) return;
-    const dy = e.clientY - dragState.startY;
-    const dx = e.clientX - dragState.startX;
-    if (Math.abs(dy) > 28 && Math.abs(dy) > Math.abs(dx)) {
-      dragState.triggered = true;
-      const wantExpanded = dy > 0;
-      if (wantExpanded !== calGridExpanded) {
-        calGridExpanded = wantExpanded;
-        renderCalendar();
-      }
-      calSuppressNextClick = true;
-    } else if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-      dragState.triggered = true;
-      shiftMonth(dx < 0 ? 1 : -1); // swipe left -> next month, swipe right -> previous month
-      calSuppressNextClick = true;
-    }
-  });
-  ['pointerup', 'pointercancel'].forEach(evt => zone.addEventListener(evt, () => { dragState = null; }));
-})();
-
 function colorForAssignee(assignee) {
   if (assignee === 'all' || !assignee) return '#B9AE94';
   const m = state.members[assignee];
   return m ? colorFor(m.colorIndex) : '#B9AE94';
 }
-
-/* Group a day's events+tasks into member "rows", like a family wall calendar
-   (전체 row first, then each member in join order, unknown assignees under 기타) */
-function groupItemsByMember(events, tasks) {
-  const groups = [];
-  const tag = (arr, type) => arr.map(item => ({ type, item }));
-  const remaining = [...tag(events, 'event'), ...tag(tasks, 'task')];
-
-  const allItems = remaining.filter(x => x.item.assignee === 'all' || !x.item.assignee);
-  if (allItems.length) groups.push({ key: 'all', label: '전체', emoji: '👪', colorHex: '#B9AE94', items: allItems });
-
-  Object.entries(state.members)
-    .sort((a, b) => (a[1].colorIndex ?? 0) - (b[1].colorIndex ?? 0))
-    .forEach(([mid, m]) => {
-      const items = remaining.filter(x => x.item.assignee === mid);
-      if (items.length) groups.push({ key: mid, label: m.name, emoji: null, colorHex: colorFor(m.colorIndex), items });
-    });
-
-  const known = new Set(groups.flatMap(g => g.items.map(x => x.item)));
-  const orphan = remaining.filter(x => !known.has(x.item));
-  if (orphan.length) groups.push({ key: 'other', label: '기타', emoji: '❔', colorHex: '#B9AE94', items: orphan });
-
-  return groups;
-}
-
-/* Render a date's events+tasks grouped into member rows into the given container (does not clear it) */
-function renderGroupedItemCards(container, events, tasks) {
-  groupItemsByMember(events, tasks).forEach(g => {
-    const head = document.createElement('div');
-    head.className = 'member-group-header';
-    head.innerHTML = `<span class="avatar-dot" style="background:${g.colorHex}">${g.emoji || initialsFor(g.label)}</span><span>${escapeHtml(g.label)}</span>`;
-    container.appendChild(head);
-
-    g.items.filter(x => x.type === 'event').map(x => x.item)
-      .sort((a, b) => (a.allDay ? '' : a.startTime || '').localeCompare(b.allDay ? '' : b.startTime || ''))
-      .forEach(ev => container.appendChild(buildEventCard(ev)));
-    g.items.filter(x => x.type === 'task').map(x => x.item)
-      .forEach(t => container.appendChild(buildTaskCard(t)));
-  });
-}
-
-function buildEventCard(ev) {
-  const card = document.createElement('div');
-  card.className = 'event-card';
-  card.style.setProperty('--pin-color', colorForAssignee(ev.assignee));
-  const timeLabel = ev.allDay ? '하루 종일' : [ev.startTime, ev.endTime].filter(Boolean).join(' – ');
-  const assigneeName = ev.assignee === 'all' ? '전체' : (state.members[ev.assignee]?.name || '?');
-  const repeatLabel = repeatLabelFor(ev);
-  const multiLabel = multiDateLabelFor(ev);
-  card.innerHTML = `
-    <p class="event-title">${escapeHtml(ev.title)}${repeatLabel ? ` <span class="repeat-chip">↻ ${repeatLabel}</span>` : ''}${multiLabel ? ` <span class="repeat-chip">📆 ${multiLabel}</span>` : ''}</p>
-    <div class="event-meta">
-      <span>${timeLabel}</span>
-      <span class="event-assignee-badge">
-        <span class="avatar-dot" style="background:${colorForAssignee(ev.assignee)}">${ev.assignee==='all'?'👪':initialsFor(assigneeName)}</span>
-        ${escapeHtml(assigneeName)}
-      </span>
-    </div>
-  `;
-  card.addEventListener('click', () => openEventModal(ev));
-  return card;
-}
-
-let dayPanelMode = localStorage.getItem('dayPanelMode') === 'timeline' ? 'timeline' : 'list';
-
-function setDayPanelMode(mode) {
-  dayPanelMode = mode;
-  localStorage.setItem('dayPanelMode', mode);
-  document.getElementById('day-events-list').classList.toggle('hidden', mode !== 'list');
-  document.getElementById('day-timeline').classList.toggle('hidden', mode !== 'timeline');
-  const toggle = document.getElementById('day-panel-mode-toggle');
-  toggle.textContent = mode === 'list' ? '🕐' : '📋';
-  toggle.setAttribute('aria-label', mode === 'list' ? '시간대 보기로 전환' : '목록 보기로 전환');
-  renderDayPanel();
-}
-document.getElementById('day-panel-mode-toggle').addEventListener('click', () => {
-  setDayPanelMode(dayPanelMode === 'list' ? 'timeline' : 'list');
-});
-document.getElementById('day-events-list').classList.toggle('hidden', dayPanelMode !== 'list');
-document.getElementById('day-timeline').classList.toggle('hidden', dayPanelMode !== 'timeline');
-document.getElementById('day-panel-mode-toggle').textContent = dayPanelMode === 'list' ? '🕐' : '📋';
-
-function renderDayPanel() {
-  const [y,mo,da] = state.selectedDate.split('-').map(Number);
-  const d = new Date(y, mo-1, da);
-  const label = `${mo}월 ${da}일 (${WEEKDAYS_KO[d.getDay()]})` + (state.selectedDate === todayStr() ? ' · 오늘' : '');
-  document.getElementById('day-panel-date').textContent = label;
-
-  const [sy, smo, sda] = state.selectedDate.split('-').map(Number);
-  const dayAnniversaries = Object.values(state.anniversaries).filter(a => a.month === smo && a.day === sda);
-  const dayEvents = eventsOnDate(state.selectedDate)
-    .sort((a,b) => (a.allDay ? '' : a.startTime||'').localeCompare(b.allDay ? '' : b.startTime||''));
-  const dayTasks = tasksOnDate(state.selectedDate);
-
-  if (dayPanelMode === 'timeline') {
-    renderDayTimeline(state.selectedDate, dayEvents, dayTasks, dayAnniversaries);
-    return;
-  }
-
-  const list = document.getElementById('day-events-list');
-  list.innerHTML = '';
-  dayAnniversaries.forEach(a => {
-    const card = document.createElement('div');
-    card.className = 'day-card-anniversary';
-    card.textContent = `${a.type === 'birthday' ? '🎂' : '🎉'} ${a.title}`;
-    list.appendChild(card);
-  });
-  if (dayEvents.length === 0 && dayTasks.length === 0) {
-    if (dayAnniversaries.length === 0) list.innerHTML += '<p class="empty-state">이 날은 일정이 없어요.</p>';
-    return;
-  }
-  renderGroupedItemCards(list, dayEvents, dayTasks);
-}
-
-/* ---- Timeline mode: hour-by-hour axis with events plotted by start/end time ---- */
-const TIMELINE_ROW_HEIGHT = 48; // px per hour
-
-function timeStrToMinutes(t) {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
-}
-
-/* Greedy column assignment so overlapping events sit side-by-side instead of stacking */
-function layoutTimelineEvents(entries) {
-  const arr = entries.map(e => ({ ...e }));
-  arr.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
-  const active = [];
-  arr.forEach(it => {
-    for (let i = active.length - 1; i >= 0; i--) if (active[i].endMin <= it.startMin) active.splice(i, 1);
-    const usedCols = new Set(active.map(a => a.col));
-    let col = 0; while (usedCols.has(col)) col++;
-    it.col = col;
-    active.push({ endMin: it.endMin, col });
-  });
-  arr.forEach(it => {
-    let maxCol = it.col;
-    arr.forEach(other => { if (other.startMin < it.endMin && other.endMin > it.startMin) maxCol = Math.max(maxCol, other.col); });
-    it.totalCols = maxCol + 1;
-  });
-  return arr;
-}
-
-function renderDayTimeline(dateStr, dayEvents, dayTasks, dayAnniversaries) {
-  const alldayWrap = document.getElementById('day-timeline-allday');
-  alldayWrap.innerHTML = '<span class="day-timeline-allday-label">종일</span>';
-  const alldayItems = [
-    ...dayAnniversaries.map(a => ({ title: `${a.type === 'birthday' ? '🎂' : '🎉'} ${a.title}`, colorHex: '#B9AE94', onClick: null })),
-    ...dayEvents.filter(ev => ev.allDay).map(ev => ({ title: ev.title, colorHex: colorForAssignee(ev.assignee), onClick: () => openEventModal(ev) })),
-    ...dayTasks.map(t => ({ title: t.title, colorHex: colorForAssignee(t.assignee), done: t.done, onClick: () => openTaskModal(t) })),
-  ];
-  alldayItems.forEach(({ title, colorHex, onClick, done }) => {
-    const chip = document.createElement('span');
-    chip.className = 'day-timeline-chip' + (done ? ' done' : '');
-    chip.style.borderLeftColor = colorHex;
-    chip.textContent = title;
-    if (onClick) chip.addEventListener('click', onClick);
-    alldayWrap.appendChild(chip);
-  });
-
-  const grid = document.getElementById('day-timeline-grid');
-  grid.innerHTML = '';
-  grid.style.height = (24 * TIMELINE_ROW_HEIGHT) + 'px';
-  for (let h = 0; h < 24; h++) {
-    const row = document.createElement('div');
-    row.className = 'day-timeline-hour';
-    row.style.top = (h * TIMELINE_ROW_HEIGHT) + 'px';
-    row.innerHTML = `<span class="day-timeline-hour-label">${pad2(h)}:00</span>`;
-    grid.appendChild(row);
-  }
-
-  const timedEvents = dayEvents.filter(ev => !ev.allDay && ev.startTime);
-  const laidOut = layoutTimelineEvents(timedEvents.map(ev => {
-    const startMin = timeStrToMinutes(ev.startTime);
-    const endMin = ev.endTime ? Math.max(timeStrToMinutes(ev.endTime), startMin + 20) : startMin + 40;
-    return { ev, startMin, endMin };
-  }));
-  const laneWidth = Math.max(grid.clientWidth - 56, 60);
-  laidOut.forEach(({ ev, startMin, endMin, col, totalCols }) => {
-    const colWidth = laneWidth / totalCols;
-    const block = document.createElement('div');
-    block.className = 'day-timeline-block';
-    block.style.top = (startMin / 60 * TIMELINE_ROW_HEIGHT) + 'px';
-    block.style.height = ((endMin - startMin) / 60 * TIMELINE_ROW_HEIGHT - 2) + 'px';
-    block.style.left = (56 + col * colWidth) + 'px';
-    block.style.width = (colWidth - 4) + 'px';
-    block.style.background = colorForAssignee(ev.assignee);
-    block.innerHTML = `<span class="day-timeline-block-time">${ev.startTime}</span><span class="day-timeline-block-title">${escapeHtml(ev.title)}</span>`;
-    block.addEventListener('click', () => openEventModal(ev));
-    grid.appendChild(block);
-  });
-
-  if (dateStr === todayStr()) {
-    const now = new Date();
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    const line = document.createElement('div');
-    line.className = 'day-timeline-now';
-    line.style.top = (nowMin / 60 * TIMELINE_ROW_HEIGHT) + 'px';
-    grid.appendChild(line);
-  }
-
-  const scrollEl = document.getElementById('day-timeline-scroll');
-  let scrollMin = 8 * 60;
-  if (dateStr === todayStr()) {
-    scrollMin = Math.max(0, new Date().getHours() * 60 - 90);
-  } else if (laidOut.length) {
-    scrollMin = Math.max(0, Math.min(...laidOut.map(l => l.startMin)) - 60);
-  }
-  scrollEl.scrollTop = scrollMin / 60 * TIMELINE_ROW_HEIGHT;
-}
-
-/* Swipe the day panel left/right to jump to the next/previous day's schedule */
-(function initDayPanelSwipe() {
-  const panel = document.getElementById('day-panel');
-  let start = null;
-  panel.addEventListener('pointerdown', (e) => {
-    start = { x: e.clientX, y: e.clientY, triggered: false };
-  });
-  panel.addEventListener('pointermove', (e) => {
-    if (!start || start.triggered) return;
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-      start.triggered = true;
-      state.selectedDate = shiftDate(state.selectedDate, dx < 0 ? 1 : -1);
-      const [y, m] = state.selectedDate.split('-').map(Number);
-      state.viewYear = y; state.viewMonth = m - 1;
-      renderCalendar();
-      renderDayPanel();
-    }
-  });
-  ['pointerup', 'pointercancel'].forEach(evt => panel.addEventListener(evt, () => { start = null; }));
-})();
-
-/* ===================== Calendar / Week / List view toggle (per-device) ===================== */
-function applyCalView(view) {
-  localStorage.setItem('calView', view);
-  document.getElementById('cal-view').classList.toggle('hidden', view !== 'calendar');
-  document.getElementById('week-view').classList.toggle('hidden', view !== 'week');
-  document.getElementById('list-view').classList.toggle('hidden', view !== 'list');
-  document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-  if (view === 'week') weekViewAnchor = state.selectedDate; // jump to whichever week the selected date is in
-  refreshActiveCalSubView();
-}
-function refreshActiveCalSubView() {
-  const view = localStorage.getItem('calView') || 'calendar';
-  if (view === 'list') renderEventList();
-  else if (view === 'week') renderWeekView();
-}
-document.querySelectorAll('.view-btn').forEach(btn => {
-  btn.addEventListener('click', () => applyCalView(btn.dataset.view));
-});
-document.getElementById('btn-add-event-list').addEventListener('click', () => openEventModal(null));
-
-function shiftDate(dateStr, days) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + days);
-  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
-}
-
-/* ---- Week/Day grid views: dates as columns, family members as rows (like a wall calendar) ---- */
-let weekViewAnchor = todayStr();
-
-function weekDatesFor(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  const dow = dt.getDay();
-  const mondayOffset = dow === 0 ? -6 : 1 - dow;
-  const monday = new Date(dt); monday.setDate(dt.getDate() + mondayOffset);
-  const out = [];
-  for (let i = 0; i < 7; i++) {
-    const d2 = new Date(monday); d2.setDate(monday.getDate() + i);
-    out.push(`${d2.getFullYear()}-${pad2(d2.getMonth() + 1)}-${pad2(d2.getDate())}`);
-  }
-  return out;
-}
-
-function scheduleRows() {
-  const rows = [{ key: 'all', label: '전체', emoji: '👪', colorHex: '#B9AE94' }];
-  Object.entries(state.members)
-    .sort((a, b) => (a[1].colorIndex ?? 0) - (b[1].colorIndex ?? 0))
-    .forEach(([mid, m]) => rows.push({ key: mid, label: m.name, emoji: null, colorHex: colorFor(m.colorIndex) }));
-  return rows;
-}
-
-function itemsForRowOnDate(rowKey, dateStr) {
-  const matches = (assignee) => rowKey === 'all' ? (assignee === 'all' || !assignee) : assignee === rowKey;
-  const evs = eventsOnDate(dateStr).filter(e => matches(e.assignee))
-    .sort((a, b) => (a.allDay ? '' : a.startTime || '').localeCompare(b.allDay ? '' : b.startTime || ''));
-  const tasks = tasksOnDate(dateStr).filter(t => matches(t.assignee));
-  return { evs, tasks };
-}
-
-function renderScheduleGrid(container, dates) {
-  const rows = scheduleRows();
-  let html = '<div class="sched-grid-scroll"><table class="sched-grid"><thead><tr><th class="sched-corner"></th>';
-  dates.forEach(d => {
-    const [, mo, da] = d.split('-').map(Number);
-    const wd = weekdayOf(d);
-    const isToday = d === todayStr();
-    const annivMatch = Object.values(state.anniversaries).find(a => a.month === mo && a.day === da);
-    const annivBadge = annivMatch ? `<span class="sched-anniv">${annivMatch.type === 'birthday' ? '🎂' : '🎉'}</span>` : '';
-    html += `<th class="sched-date-th${isToday ? ' today' : ''}" data-date="${d}"><span class="sched-date-num">${da}</span><span class="sched-date-wd">${WEEKDAYS_KO[wd]}</span>${annivBadge}</th>`;
-  });
-  html += '</tr></thead><tbody>';
-
-  rows.forEach(row => {
-    html += `<tr><th class="sched-row-label"><span class="avatar-dot" style="background:${row.colorHex}">${row.emoji || initialsFor(row.label)}</span><span>${escapeHtml(row.label)}</span></th>`;
-    dates.forEach(d => {
-      const { evs, tasks } = itemsForRowOnDate(row.key, d);
-      let cellHtml = '';
-      evs.forEach(ev => {
-        const timeLabel = ev.allDay || !ev.startTime ? '' : `${ev.startTime} `;
-        cellHtml += `<span class="sched-item" data-ev="${ev.id}">${escapeHtml(timeLabel + ev.title)}</span>`;
-      });
-      tasks.forEach(t => {
-        cellHtml += `<span class="sched-item sched-item-task${t.done ? ' done' : ''}" data-task="${t.id}">${escapeHtml(t.title)}</span>`;
-      });
-      html += `<td class="sched-cell" data-date="${d}" data-row="${row.key}">${cellHtml}</td>`;
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table></div>';
-  container.innerHTML = html;
-
-  container.querySelectorAll('.sched-item[data-ev]').forEach(el => {
-    el.addEventListener('click', (e) => { e.stopPropagation(); const ev = state.events[el.dataset.ev]; if (ev) openEventModal(ev); });
-  });
-  container.querySelectorAll('.sched-item[data-task]').forEach(el => {
-    el.addEventListener('click', (e) => { e.stopPropagation(); const t = state.tasks[el.dataset.task]; if (t) openTaskModal(t); });
-  });
-  container.querySelectorAll('.sched-cell').forEach(el => {
-    el.addEventListener('dblclick', () => { state.selectedDate = el.dataset.date; openEventModal(null); });
-  });
-  container.querySelectorAll('.sched-date-th').forEach(el => {
-    el.addEventListener('click', () => { state.selectedDate = el.dataset.date; applyCalView('day'); });
-  });
-}
-
-function renderWeekView() {
-  const dates = weekDatesFor(weekViewAnchor);
-  const [sy, sm, sd] = dates[0].split('-').map(Number);
-  const [, em, ed] = dates[6].split('-').map(Number);
-  document.getElementById('week-label').textContent =
-    sm === em ? `${sy}. ${MONTHS_KO[sm - 1]} ${sd}~${ed}일` : `${MONTHS_KO[sm - 1]} ${sd}일 ~ ${MONTHS_KO[em - 1]} ${ed}일`;
-  renderScheduleGrid(document.getElementById('week-grid-wrap'), dates);
-}
-document.getElementById('week-prev').addEventListener('click', () => { weekViewAnchor = shiftDate(weekViewAnchor, -7); renderWeekView(); });
-document.getElementById('week-next').addEventListener('click', () => { weekViewAnchor = shiftDate(weekViewAnchor, 7); renderWeekView(); });
-
-function renderEventList() {
-  const wrap = document.getElementById('event-list-upcoming');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-  const start = new Date(); start.setHours(0, 0, 0, 0);
-  const days = [];
-  for (let i = 0; i < 60; i++) {
-    const d = new Date(start); d.setDate(start.getDate() + i);
-    const dateStr = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    const evs = eventsOnDate(dateStr)
-      .sort((a, b) => (a.allDay ? '' : a.startTime || '').localeCompare(b.allDay ? '' : b.startTime || ''));
-    const tasks = tasksOnDate(dateStr);
-    const annivs = Object.values(state.anniversaries).filter(a => a.month === d.getMonth() + 1 && a.day === d.getDate());
-    if (evs.length || tasks.length || annivs.length) days.push({ d, dateStr, evs, tasks, annivs });
-  }
-  if (days.length === 0) {
-    wrap.innerHTML = '<p class="empty-state">앞으로 60일간 등록된 일정이 없어요. 위 버튼으로 추가해보세요.</p>';
-    return;
-  }
-  days.forEach(({ d, dateStr, evs, tasks, annivs }) => {
-    const header = document.createElement('div');
-    header.className = 'list-date-header';
-    header.innerHTML = `<span class="list-date-day">${d.getDate()}</span>
-      <span class="list-date-rest">${MONTHS_KO[d.getMonth()]} · ${WEEKDAYS_KO[d.getDay()]}요일${dateStr === todayStr() ? ' · 오늘' : ''}</span>`;
-    wrap.appendChild(header);
-    annivs.forEach(a => {
-      const card = document.createElement('div');
-      card.className = 'day-card-anniversary';
-      card.textContent = `${a.type === 'birthday' ? '🎂' : '🎉'} ${a.title}`;
-      wrap.appendChild(card);
-    });
-    renderGroupedItemCards(wrap, evs, tasks);
-  });
-}
-{
-  const savedView = localStorage.getItem('calView');
-  applyCalView(['calendar', 'week', 'list'].includes(savedView) ? savedView : 'calendar');
-}
-
-/* ===================== Event modal ===================== */
-const modal = document.getElementById('modal-event');
-document.getElementById('modal-event-close').addEventListener('click', closeEventModal);
-modal.addEventListener('click', (e) => { if (e.target === modal) closeEventModal(); });
-
-document.getElementById('event-allday').addEventListener('change', (e) => {
-  document.getElementById('event-time-row').style.display = e.target.checked ? 'none' : 'grid';
-});
-
-/* ---- Date mode: single day / date range / several picked dates ---- */
-let eventDateMode = 'single';
-let pickedEventDates = [];
-
-function setEventDateMode(mode) {
-  eventDateMode = mode;
-  document.querySelectorAll('.date-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.dateMode === mode));
-  document.getElementById('date-mode-single').classList.toggle('hidden', mode !== 'single');
-  document.getElementById('date-mode-range').classList.toggle('hidden', mode !== 'range');
-  document.getElementById('date-mode-multi').classList.toggle('hidden', mode !== 'multi');
-  document.getElementById('event-date').required = mode === 'single';
-  document.getElementById('event-repeat-block').classList.toggle('hidden', mode !== 'single');
-  document.getElementById('event-repeat-disabled-hint').classList.toggle('hidden', mode === 'single');
-  if (mode === 'multi') renderMultiCal();
-}
-document.querySelectorAll('.date-mode-btn').forEach(btn => {
-  btn.addEventListener('click', () => setEventDateMode(btn.dataset.dateMode));
-});
-
-function renderPickedEventDates() {
-  const wrap = document.getElementById('picked-dates-list');
-  wrap.innerHTML = '';
-  [...pickedEventDates].sort().forEach(d => {
-    const [, m, day] = d.split('-');
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'picked-date-chip';
-    chip.innerHTML = `${Number(m)}/${Number(day)} <span class="picked-date-remove">✕</span>`;
-    chip.addEventListener('click', () => togglePickedEventDate(d));
-    wrap.appendChild(chip);
-  });
-  document.getElementById('picked-dates-hint').classList.toggle('hidden', pickedEventDates.length > 0);
-}
-
-function togglePickedEventDate(dateStr) {
-  if (pickedEventDates.includes(dateStr)) {
-    pickedEventDates = pickedEventDates.filter(x => x !== dateStr);
-  } else {
-    pickedEventDates.push(dateStr);
-  }
-  renderPickedEventDates();
-  renderMultiCal();
-}
-
-/* Tappable mini-calendar for picking several (not necessarily consecutive) dates */
-let multiCalYear = new Date().getFullYear();
-let multiCalMonth = new Date().getMonth();
-
-function renderMultiCal() {
-  const grid = document.getElementById('multi-cal-grid');
-  if (!grid) return;
-  document.getElementById('multi-cal-month-label').textContent = `${multiCalYear}. ${MONTHS_KO[multiCalMonth]}`;
-  grid.innerHTML = '';
-  const firstOfMonth = new Date(multiCalYear, multiCalMonth, 1);
-  const startOffset = firstOfMonth.getDay();
-  const gridStart = new Date(multiCalYear, multiCalMonth, 1 - startOffset);
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(gridStart);
-    d.setDate(gridStart.getDate() + i);
-    const dateStr = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    const cell = document.createElement('div');
-    cell.className = 'cal-day';
-    if (d.getMonth() !== multiCalMonth) cell.classList.add('other-month');
-    if (dateStr === todayStr()) cell.classList.add('today');
-    if (pickedEventDates.includes(dateStr)) cell.classList.add('selected');
-    cell.textContent = d.getDate();
-    cell.addEventListener('click', () => togglePickedEventDate(dateStr));
-    grid.appendChild(cell);
-  }
-}
-document.getElementById('multi-cal-prev').addEventListener('click', () => {
-  multiCalMonth--;
-  if (multiCalMonth < 0) { multiCalMonth = 11; multiCalYear--; }
-  renderMultiCal();
-});
-document.getElementById('multi-cal-next').addEventListener('click', () => {
-  multiCalMonth++;
-  if (multiCalMonth > 11) { multiCalMonth = 0; multiCalYear++; }
-  renderMultiCal();
-});
-
-function syncRepeatRows() {
-  const repeat = document.getElementById('event-repeat').value;
-  document.getElementById('event-weekdays').classList.toggle('hidden', repeat !== 'weekly');
-  document.getElementById('event-until-row').classList.toggle('hidden', repeat === 'none');
-}
-document.getElementById('event-repeat').addEventListener('change', () => {
-  const repeat = document.getElementById('event-repeat').value;
-  // when switching to weekly, default-check the weekday of the chosen date
-  if (repeat === 'weekly') {
-    const anyChecked = [...document.querySelectorAll('#event-weekdays input')].some(c => c.checked);
-    if (!anyChecked) {
-      const dateVal = document.getElementById('event-date').value;
-      if (dateVal) {
-        const wd = weekdayOf(dateVal);
-        const box = document.querySelector(`#event-weekdays input[value="${wd}"]`);
-        if (box) box.checked = true;
-      }
-    }
-  }
-  syncRepeatRows();
-});
-
-/* ---- 24-hour time selects (no clock icon, no AM/PM) ---- */
-function fillTimeSelects() {
-  ['event-start', 'event-end'].forEach(p => {
-    const hs = document.getElementById(p + '-hour');
-    const ms = document.getElementById(p + '-min');
-    if (!hs || hs.dataset.filled) return;
-    let ho = '<option value="">--</option>';
-    for (let h = 0; h < 24; h++) ho += `<option value="${pad2(h)}">${pad2(h)}시</option>`;
-    hs.innerHTML = ho;
-    let mo = '';
-    for (let m = 0; m < 60; m += 5) mo += `<option value="${pad2(m)}">${pad2(m)}분</option>`;
-    ms.innerHTML = mo;
-    hs.dataset.filled = '1';
-  });
-}
-function setTimeSel(prefix, val) {
-  fillTimeSelects();
-  const hs = document.getElementById(prefix + '-hour');
-  const ms = document.getElementById(prefix + '-min');
-  if (val && /^\d{1,2}:\d{2}$/.test(val)) {
-    const [h, m] = val.split(':').map(Number);
-    hs.value = pad2(h);
-    ms.value = pad2(m - (m % 5));
-  } else {
-    hs.value = ''; ms.value = '00';
-  }
-}
-function getTimeSel(prefix) {
-  const h = document.getElementById(prefix + '-hour').value;
-  if (!h) return null;
-  const m = document.getElementById(prefix + '-min').value || '00';
-  return `${h}:${m}`;
-}
-fillTimeSelects();
 
 function renderAssigneeOptions() {
   ['event-assignee', 'task-assignee'].forEach(id => {
@@ -1177,136 +410,16 @@ function renderAssigneeOptions() {
   });
 }
 
-function openEventModal(ev) {
-  state.editingEventId = ev ? ev.id : null;
-  document.getElementById('modal-event-title').textContent = ev ? '일정 수정' : '일정 추가';
-  document.getElementById('event-title').value = ev ? ev.title : '';
-  document.getElementById('event-date').value = ev ? ev.date : state.selectedDate;
-  document.getElementById('event-date-start').value = ev?.date || state.selectedDate;
-  document.getElementById('event-date-end').value = ev?.endDate || ev?.date || state.selectedDate;
-  pickedEventDates = ev?.dates ? [...ev.dates] : [];
-  renderPickedEventDates();
-  const multiCalSeed = pickedEventDates[0] || state.selectedDate;
-  const [seedY, seedM] = multiCalSeed.split('-').map(Number);
-  multiCalYear = seedY; multiCalMonth = seedM - 1;
-  setEventDateMode(ev?.dates?.length ? 'multi' : ev?.endDate ? 'range' : 'single');
-  document.getElementById('event-allday').checked = ev ? !!ev.allDay : false;
-  document.getElementById('event-time-row').style.display = (ev && ev.allDay) ? 'none' : 'grid';
-  setTimeSel('event-start', ev?.startTime);
-  setTimeSel('event-end', ev?.endTime);
-  document.getElementById('event-notes').value = ev?.notes || '';
-  document.getElementById('event-error').textContent = '';
-  renderAssigneeOptions();
-  document.getElementById('event-assignee').value = ev?.assignee || 'all';
-  // recurrence
-  document.getElementById('event-repeat').value = ev?.repeat || 'none';
-  document.querySelectorAll('#event-weekdays input').forEach(cb => {
-    cb.checked = !!(ev?.weekdays && ev.weekdays.includes(Number(cb.value)));
-  });
-  document.getElementById('event-until').value = ev?.repeatUntil || '';
-  syncRepeatRows();
-  document.getElementById('btn-delete-event').classList.toggle('hidden', !ev);
-  const hasMoreOptionsData = !!(ev && ((ev.repeat && ev.repeat !== 'none') || ev.notes));
-  setMoreOptionsOpen('event', hasMoreOptionsData);
-  modal.classList.remove('hidden');
-}
-function closeEventModal() { modal.classList.add('hidden'); state.editingEventId = null; }
-
 /* "옵션 더보기" toggles shared by the event/task modals */
 function setMoreOptionsOpen(kind, open) {
   document.getElementById(`${kind}-more-options`).classList.toggle('hidden', !open);
   const btn = document.getElementById(`${kind}-more-toggle`);
   if (btn) btn.textContent = open ? '옵션 접기' : '옵션 더보기';
 }
-document.getElementById('event-more-toggle').addEventListener('click', () => {
-  const isOpen = !document.getElementById('event-more-options').classList.contains('hidden');
-  setMoreOptionsOpen('event', !isOpen);
-});
 document.getElementById('task-more-toggle').addEventListener('click', () => {
   const isOpen = !document.getElementById('task-more-options').classList.contains('hidden');
   setMoreOptionsOpen('task', !isOpen);
 });
-
-/* FAB: tap + to reveal 심부름 / 일정 quick-add choices */
-const fabWrap = document.getElementById('cal-fab-wrap');
-function setFabOpen(open) {
-  fabWrap.classList.toggle('open', open);
-  document.getElementById('fab-menu').classList.toggle('hidden', !open);
-}
-document.getElementById('fab-main').addEventListener('click', () => {
-  setFabOpen(!fabWrap.classList.contains('open'));
-});
-document.getElementById('fab-add-task').addEventListener('click', () => {
-  setFabOpen(false);
-  openTaskModal(null);
-});
-document.getElementById('fab-add-event').addEventListener('click', () => {
-  setFabOpen(false);
-  openEventModal(null);
-});
-
-document.getElementById('form-event').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const errEl = document.getElementById('event-error');
-  errEl.textContent = '';
-  const allDay = document.getElementById('event-allday').checked;
-
-  let date, endDate = null, dates = null, repeat = 'none', weekdays = [], repeatUntil = null;
-  if (eventDateMode === 'range') {
-    date = document.getElementById('event-date-start').value;
-    endDate = document.getElementById('event-date-end').value;
-  } else if (eventDateMode === 'multi') {
-    dates = [...pickedEventDates].sort();
-    date = dates[0] || '';
-  } else {
-    date = document.getElementById('event-date').value;
-    repeat = document.getElementById('event-repeat').value;
-    weekdays = repeat === 'weekly'
-      ? [...document.querySelectorAll('#event-weekdays input:checked')].map(c => Number(c.value))
-      : [];
-    repeatUntil = repeat !== 'none' ? (document.getElementById('event-until').value || null) : null;
-  }
-
-  const data = {
-    title: document.getElementById('event-title').value.trim(),
-    date, endDate, dates,
-    allDay,
-    startTime: allDay ? null : getTimeSel('event-start'),
-    endTime: allDay ? null : getTimeSel('event-end'),
-    assignee: document.getElementById('event-assignee').value,
-    notes: document.getElementById('event-notes').value.trim() || null,
-    repeat,
-    weekdays,
-    repeatUntil,
-  };
-  if (!data.title || !data.date) { errEl.textContent = '제목과 날짜를 입력해주세요.'; return; }
-  if (eventDateMode === 'range' && data.endDate && data.endDate < data.date) {
-    errEl.textContent = '종료일이 시작일보다 빠를 수 없어요.'; return;
-  }
-  if (eventDateMode === 'multi' && (!dates || dates.length === 0)) {
-    errEl.textContent = '날짜를 하나 이상 추가해주세요.'; return;
-  }
-  if (repeat === 'weekly' && weekdays.length === 0) { errEl.textContent = '반복할 요일을 하나 이상 선택해주세요.'; return; }
-  try {
-    const col = db.collection('families').doc(state.familyId).collection('events');
-    if (state.editingEventId) {
-      await col.doc(state.editingEventId).update(data);
-    } else {
-      await col.add({ ...data, createdBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-    }
-    closeEventModal();
-  } catch (err) {
-    errEl.textContent = `저장에 실패했어요 (${err.code || err.message})`;
-  }
-});
-
-document.getElementById('btn-delete-event').addEventListener('click', async () => {
-  if (!state.editingEventId) return;
-  if (!confirm('이 일정을 삭제할까요?')) return;
-  await db.collection('families').doc(state.familyId).collection('events').doc(state.editingEventId).delete();
-  closeEventModal();
-});
-
 
 /* ===================== Tasks (chores) ===================== */
 document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -1361,7 +474,7 @@ function renderTasks() {
   tasks.sort((a,b) => (a.done === b.done) ? 0 : (a.done ? 1 : -1));
 
   if (tasks.length === 0) {
-    list.innerHTML = '<p class="empty-state">심부름이 없어요. 오른쪽 위 버튼으로 추가해보세요.</p>';
+    list.innerHTML = '<p class="empty-state">집안일이 없어요. 오른쪽 위 버튼으로 추가해보세요.</p>';
     return;
   }
   tasks.forEach(t => list.appendChild(buildTaskCard(t)));
@@ -1397,7 +510,7 @@ document.getElementById('task-repeat').addEventListener('change', () => {
 
 function openTaskModal(t) {
   state.editingTaskId = t ? t.id : null;
-  document.getElementById('modal-task-title').textContent = t ? '심부름 수정' : '심부름 추가';
+  document.getElementById('modal-task-title').textContent = t ? '집안일 수정' : '집안일 추가';
   document.getElementById('task-title').value = t ? t.title : '';
   document.getElementById('task-due').value = t?.dueDate || '';
   document.getElementById('task-repeat').value = t?.repeat || 'none';
@@ -1429,7 +542,7 @@ document.getElementById('form-task').addEventListener('submit', async (e) => {
     repeat,
     weekdays,
   };
-  if (!data.title) { errEl.textContent = '심부름 내용을 입력해주세요.'; return; }
+  if (!data.title) { errEl.textContent = '집안일 내용을 입력해주세요.'; return; }
   if (repeat === 'weekly' && weekdays.length === 0) { errEl.textContent = '반복할 요일을 하나 이상 선택해주세요.'; return; }
   try {
     const col = db.collection('families').doc(state.familyId).collection('tasks');
@@ -1446,12 +559,12 @@ document.getElementById('form-task').addEventListener('submit', async (e) => {
 
 document.getElementById('btn-delete-task').addEventListener('click', async () => {
   if (!state.editingTaskId) return;
-  if (!confirm('이 심부름을 삭제할까요?')) return;
+  if (!confirm('이 집안일을 삭제할까요?')) return;
   await db.collection('families').doc(state.familyId).collection('tasks').doc(state.editingTaskId).delete();
   closeTaskModal();
 });
 
-/* ===================== Request tab: 심부름 / 장보기 / 위시 sub-view toggle (per-device) ===================== */
+/* ===================== Request tab: 집안일 / 장보기 / 위시 sub-view toggle (per-device) ===================== */
 const GOODS_VIEWS = ['tasks', 'shopping', 'wish'];
 function applyGoodsView(view) {
   if (!GOODS_VIEWS.includes(view)) view = 'tasks';
@@ -1472,12 +585,25 @@ function renderRequestStatus() {
 }
 
 /* ===================== Shopping / household supplies ===================== */
+const SHOP_CAT_EMOJI = { food: '🥦', daily: '🧻', etc: '📦' };
+
+document.querySelectorAll('.shop-filter').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.shop-filter').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.shopFilter = btn.dataset.sfilter;
+    renderShopping();
+  });
+});
+
 function renderShopping() {
   renderRequestStatus();
   const list = document.getElementById('shopping-list');
   if (!list) return;
   list.innerHTML = '';
-  const items = Object.values(state.shopping).sort((a,b) => (a.purchased === b.purchased) ? 0 : (a.purchased ? 1 : -1));
+  let items = Object.values(state.shopping);
+  if (state.shopFilter && state.shopFilter !== 'all') items = items.filter(i => (i.category || 'etc') === state.shopFilter);
+  items.sort((a,b) => (a.purchased === b.purchased) ? 0 : (a.purchased ? 1 : -1));
   if (items.length === 0) {
     list.innerHTML = '<p class="empty-state">사고 싶은 물건을 추가해보세요.</p>';
     return;
@@ -1486,15 +612,16 @@ function renderShopping() {
     const row = document.createElement('div');
     row.className = 'shopping-item' + (item.purchased ? ' purchased' : '');
     const requesterName = state.members[item.requestedBy]?.name || '?';
+    const emoji = SHOP_CAT_EMOJI[item.category] || '📦';
     row.innerHTML = `
       <span class="task-checkbox ${item.purchased ? 'checked' : ''}">${item.purchased ? '✓' : ''}</span>
-      <span class="shopping-name">${escapeHtml(item.name)}</span>
+      <span class="shopping-cat-emoji">${emoji}</span>
+      <span class="shopping-name">${escapeHtml(item.name)}${item.qty ? ` <span class="shopping-qty">${escapeHtml(item.qty)}</span>` : ''}</span>
       <span class="shopping-meta">${escapeHtml(requesterName)}님 요청</span>
-      ${item.purchased ? '<button class="shopping-delete-btn" title="삭제" aria-label="삭제">✕</button>' : ''}
+      <button class="shopping-delete-btn" title="삭제" aria-label="삭제">✕</button>
     `;
     row.querySelector('.task-checkbox').addEventListener('click', () => toggleShoppingPurchased(item));
-    const delBtn = row.querySelector('.shopping-delete-btn');
-    if (delBtn) delBtn.addEventListener('click', (e) => {
+    row.querySelector('.shopping-delete-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       db.collection('families').doc(state.familyId).collection('shopping').doc(item.id).delete();
     });
@@ -1511,13 +638,17 @@ async function toggleShoppingPurchased(item) {
 
 document.getElementById('form-shopping-add').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const input = document.getElementById('shopping-item-name');
-  const name = input.value.trim();
+  const nameInput = document.getElementById('shopping-item-name');
+  const qtyInput = document.getElementById('shopping-item-qty');
+  const name = nameInput.value.trim();
   if (!name) return;
+  const category = e.submitter?.dataset.shopCat || 'etc';
+  const qty = qtyInput.value.trim() || null;
   await db.collection('families').doc(state.familyId).collection('shopping').add({
-    name, purchased: false, requestedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    name, qty, category, purchased: false, requestedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
-  input.value = '';
+  nameInput.value = '';
+  qtyInput.value = '';
 });
 
 /* ===================== Wishlist (먹고 싶은 것 · 받고 싶은 선물) ===================== */
@@ -1574,6 +705,7 @@ function renderWishes() {
         <span class="wish-emoji">${emoji}</span>
         <div class="wish-body">
           <span class="wish-name">${escapeHtml(w.title)}</span>
+          ${w.notes ? `<span class="wish-notes">${escapeHtml(w.notes)}</span>` : ''}
         </div>
         <button class="wish-heart ${w.done ? 'on' : ''}" title="이뤄졌어요">${w.done ? '💖' : '🤍'}</button>
         <button class="wish-delete-btn" title="삭제" aria-label="삭제">✕</button>
@@ -1603,15 +735,18 @@ async function toggleWishDone(w) {
 document.getElementById('form-wish-add').addEventListener('submit', async (e) => {
   e.preventDefault();
   const input = document.getElementById('wish-title');
+  const notesInput = document.getElementById('wish-notes');
   const title = input.value.trim();
   if (!title) return;
   const category = e.submitter?.dataset.wishCat || 'gift';
+  const notes = notesInput?.value.trim() || null;
   try {
     await db.collection('families').doc(state.familyId).collection('wishes').add({
-      title, category, done: false,
+      title, category, notes, done: false,
       requestedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     input.value = '';
+    if (notesInput) notesInput.value = '';
   } catch (err) {
     if (err.code === 'permission-denied') toast('위시리스트 권한 설정이 필요해요 (규칙 재게시)');
     else toast('추가 실패: ' + (err.code || err.message));
@@ -1728,7 +863,7 @@ function renderNotices() {
       <div class="notice-foot">
         <span class="read-info">👀 ${readBy.length}/${memberCount} ${readAvatars}</span>
         <span class="notice-actions">
-          <button class="notice-mini todo">심부름으로</button>
+          <button class="notice-mini todo">집안일로</button>
           ${unread > 0 ? '<button class="notice-mini nudge">콕 찌르기</button>' : ''}
           ${isAuthor ? `<button class="notice-mini pin">${n.pinned ? '고정해제' : '고정'}</button>` : ''}
           ${isAuthor ? '<button class="notice-mini del">삭제</button>' : ''}
