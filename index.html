@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -68,7 +68,10 @@
         <span class="brand-small">우리집</span>
         <span class="family-name" id="family-name-label"></span>
       </div>
-      <button id="btn-notif" class="icon-btn" title="알림 켜기" aria-label="알림 켜기">🔔</button>
+      <div class="header-right">
+        <button id="btn-notif" class="icon-btn" title="알림 켜기" aria-label="알림 켜기">🔔</button>
+        <button id="btn-settings" class="icon-btn" title="설정" aria-label="설정">⚙️</button>
+      </div>
     </header>
 
     <!-- MINI NOTICE BANNER (always visible, on top of every tab) -->
@@ -148,6 +151,10 @@
 
   <!-- FAMILY TAB -->
   <section id="tab-family" class="tab-panel hidden">
+    <div class="subpage-header">
+      <button id="btn-settings-back" class="icon-btn" aria-label="뒤로">←</button>
+      <h2 class="section-title">설정</h2>
+    </div>
     <div class="family-card">
       <p class="block-title">우리집 암호</p>
       <div class="invite-row">
@@ -168,15 +175,6 @@
 
     <button id="btn-logout" class="btn btn-ghost" style="margin-top:32px;">로그아웃</button>
   </section>
-
-  <nav class="bottom-nav">
-    <button class="nav-btn active" data-tab="request">
-      <span class="nav-icon">🙋</span><span>요청</span>
-    </button>
-    <button class="nav-btn" data-tab="family">
-      <span class="nav-icon">⚙️</span><span>설정</span>
-    </button>
-  </nav>
 </div>
 
 <!-- ADD/EDIT TASK MODAL -->
@@ -320,6 +318,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 
 <script src="firebase-config.js"></script>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

@@ -71,11 +71,9 @@ function showScreen(id) {
 function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
   document.getElementById(`tab-${name}`).classList.remove('hidden');
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
 }
-document.querySelectorAll('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => showTab(btn.dataset.tab));
-});
+document.getElementById('btn-settings').addEventListener('click', () => showTab('family'));
+document.getElementById('btn-settings-back').addEventListener('click', () => showTab('request'));
 
 function toast(msg) {
   const c = document.getElementById('toast-container');
