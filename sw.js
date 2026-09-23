@@ -1,4 +1,4 @@
-const CACHE_NAME = 'woorijip-v23';
+const CACHE_NAME = 'woorijip-v24';
 const SHELL = [
   './', './index.html', './style.css', './app.js', './manifest.json',
   './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'

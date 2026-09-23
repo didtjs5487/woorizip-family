@@ -644,6 +644,21 @@ const WISH_CAT_META = {
   food: { emoji: '🍽️', label: '먹고 싶은 음식' },
   gift: { emoji: '🛍️', label: '갖고 싶은 것' },
 };
+const WISH_NOTES_PLACEHOLDER = {
+  place: '상세정보 (선택 · 위치, 특징 등)',
+  food: '상세정보 (선택 · 가게 이름, 메뉴 등)',
+  gift: '상세정보 (선택 · 사이즈, 색상, 가격대 등)',
+};
+
+let selectedWishCat = 'place';
+document.querySelectorAll('#wish-cat-picker .wish-cat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#wish-cat-picker .wish-cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedWishCat = btn.dataset.wishCat;
+    document.getElementById('wish-notes').placeholder = WISH_NOTES_PLACEHOLDER[selectedWishCat];
+  });
+});
 
 document.querySelectorAll('.wish-filter').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -778,7 +793,7 @@ document.getElementById('form-wish-add').addEventListener('submit', async (e) =>
   const linkInput = document.getElementById('wish-link');
   const title = input.value.trim();
   if (!title) return;
-  const category = e.submitter?.dataset.wishCat || 'gift';
+  const category = selectedWishCat;
   const notes = notesInput?.value.trim() || null;
   let link = linkInput?.value.trim() || null;
   if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
@@ -790,6 +805,9 @@ document.getElementById('form-wish-add').addEventListener('submit', async (e) =>
     input.value = '';
     if (notesInput) notesInput.value = '';
     if (linkInput) linkInput.value = '';
+    selectedWishCat = 'place';
+    document.querySelectorAll('#wish-cat-picker .wish-cat-btn').forEach(b => b.classList.toggle('active', b.dataset.wishCat === 'place'));
+    document.getElementById('wish-notes').placeholder = WISH_NOTES_PLACEHOLDER.place;
     toast(`"${title}" 담았어요 🔖`);
   } catch (err) {
     if (err.code === 'permission-denied') toast('위시리스트 권한 설정이 필요해요 (규칙 재게시)');
