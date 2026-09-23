@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 
@@ -230,23 +230,37 @@
   </div>
 </div>
 
-<!-- WISH DETAIL MODAL -->
+<!-- WISH DETAIL / EDIT MODAL -->
 <div id="modal-wish" class="modal-overlay hidden">
   <div class="modal-card">
     <div class="modal-header">
-      <h3 id="modal-wish-title">위시 상세</h3>
+      <h3>위시 수정</h3>
       <button id="modal-wish-close" class="icon-btn" aria-label="닫기">✕</button>
     </div>
-    <div class="wish-detail">
-      <p class="wish-detail-meta" id="wish-detail-meta"></p>
-      <p class="wish-detail-notes hidden" id="wish-detail-notes"></p>
-      <a id="wish-detail-link" class="btn btn-secondary wish-detail-link-btn hidden" target="_blank" rel="noopener noreferrer">🔗 링크로 이동</a>
-      <p class="hint-text hidden" id="wish-detail-empty">저장된 메모나 링크가 없어요.</p>
-    </div>
-    <div class="modal-actions">
-      <button type="button" id="btn-delete-wish" class="btn btn-ghost">삭제</button>
-      <button type="button" id="btn-wish-detail-heart" class="btn btn-primary">💖 이뤄졌어요로 표시</button>
-    </div>
+    <p class="wish-detail-meta" id="wish-detail-meta"></p>
+    <a id="wish-detail-link" class="btn btn-secondary wish-detail-link-btn hidden" target="_blank" rel="noopener noreferrer">🔗 링크로 이동</a>
+    <form id="form-wish-edit">
+      <label class="field-label">위시</label>
+      <input type="text" id="wish-detail-title-input" placeholder="예: 마라탕, 무선 이어폰, 제주도" required>
+
+      <div class="wish-add-row2" id="wish-detail-cat-picker">
+        <button type="button" class="wish-cat-btn" data-wish-cat="place">📍 가고 싶은 곳</button>
+        <button type="button" class="wish-cat-btn" data-wish-cat="food">🍽️ 먹고 싶은 음식</button>
+        <button type="button" class="wish-cat-btn" data-wish-cat="gift">🛍️ 갖고 싶은 것</button>
+      </div>
+
+      <label class="field-label">상세정보</label>
+      <input type="text" id="wish-detail-notes-input" placeholder="위치, 사이즈, 가격대 등">
+
+      <label class="field-label">링크</label>
+      <input type="text" id="wish-detail-link-input" placeholder="인스타, 블로그, 지도 등" inputmode="url" autocapitalize="off" autocorrect="off">
+
+      <div class="modal-actions">
+        <button type="button" id="btn-delete-wish" class="btn btn-ghost">삭제</button>
+        <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+    <button type="button" id="btn-wish-detail-heart" class="btn btn-secondary wish-detail-done-btn">💖 이뤄졌어요로 표시</button>
   </div>
 </div>
 
@@ -344,6 +358,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 
 <script src="firebase-config.js"></script>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

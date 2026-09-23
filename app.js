@@ -644,10 +644,10 @@ const WISH_CAT_META = {
   food: { emoji: '🍽️', label: '먹고 싶은 음식' },
   gift: { emoji: '🛍️', label: '갖고 싶은 것' },
 };
-const WISH_NOTES_PLACEHOLDER = {
-  place: '상세정보 (선택 · 위치, 특징 등)',
-  food: '상세정보 (선택 · 가게 이름, 메뉴 등)',
-  gift: '상세정보 (선택 · 사이즈, 색상, 가격대 등)',
+const WISH_NOTES_EXAMPLES = {
+  place: '위치, 특징 등',
+  food: '가게 이름, 메뉴 등',
+  gift: '사이즈, 색상, 가격대 등',
 };
 
 let selectedWishCat = 'place';
@@ -656,7 +656,7 @@ document.querySelectorAll('#wish-cat-picker .wish-cat-btn').forEach(btn => {
     document.querySelectorAll('#wish-cat-picker .wish-cat-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     selectedWishCat = btn.dataset.wishCat;
-    document.getElementById('wish-notes').placeholder = WISH_NOTES_PLACEHOLDER[selectedWishCat];
+    document.getElementById('wish-notes').placeholder = `상세정보 (선택 · ${WISH_NOTES_EXAMPLES[selectedWishCat]})`;
   });
 });
 
@@ -740,20 +740,30 @@ async function toggleWishDone(w) {
   });
 }
 
-/* ---- Wish detail modal: tap a card to see the full note + open its saved link ---- */
+/* ---- Wish detail/edit modal: tap a card to see and fix what was entered ---- */
 const wishModal = document.getElementById('modal-wish');
 let editingWishId = null;
+let editingWishCat = 'place';
+
+document.querySelectorAll('#wish-detail-cat-picker .wish-cat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#wish-detail-cat-picker .wish-cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    editingWishCat = btn.dataset.wishCat;
+    document.getElementById('wish-detail-notes-input').placeholder = WISH_NOTES_EXAMPLES[editingWishCat];
+  });
+});
 
 function openWishModal(w) {
   editingWishId = w.id;
-  const meta = WISH_CAT_META[WISH_CATEGORIES.includes(w.category) ? w.category : 'gift'];
+  editingWishCat = WISH_CATEGORIES.includes(w.category) ? w.category : 'gift';
   const requester = state.members[w.requestedBy];
-  document.getElementById('modal-wish-title').textContent = `${meta.emoji} ${w.title}`;
-  document.getElementById('wish-detail-meta').textContent = `${meta.label} · ${requester?.name || '?'}님이 담음`;
+  document.getElementById('wish-detail-meta').textContent = `${requester?.name || '?'}님이 담음`;
 
-  const notesEl = document.getElementById('wish-detail-notes');
-  notesEl.textContent = w.notes || '';
-  notesEl.classList.toggle('hidden', !w.notes);
+  document.getElementById('wish-detail-title-input').value = w.title || '';
+  document.querySelectorAll('#wish-detail-cat-picker .wish-cat-btn').forEach(b => b.classList.toggle('active', b.dataset.wishCat === editingWishCat));
+  document.getElementById('wish-detail-notes-input').value = w.notes || '';
+  document.getElementById('wish-detail-link-input').value = w.link || '';
 
   const linkEl = document.getElementById('wish-detail-link');
   if (w.link) {
@@ -762,8 +772,6 @@ function openWishModal(w) {
   } else {
     linkEl.classList.add('hidden');
   }
-
-  document.getElementById('wish-detail-empty').classList.toggle('hidden', !!(w.notes || w.link));
 
   const heartBtn = document.getElementById('btn-wish-detail-heart');
   heartBtn.textContent = w.done ? '🤍 다시 담기' : '💖 이뤄졌어요로 표시';
@@ -783,6 +791,25 @@ document.getElementById('btn-delete-wish').addEventListener('click', async () =>
   if (confirm('이 위시를 삭제할까요?')) {
     await db.collection('families').doc(state.familyId).collection('wishes').doc(editingWishId).delete();
     closeWishModal();
+  }
+});
+
+document.getElementById('form-wish-edit').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!editingWishId) return;
+  const title = document.getElementById('wish-detail-title-input').value.trim();
+  if (!title) return;
+  const notes = document.getElementById('wish-detail-notes-input').value.trim() || null;
+  let link = document.getElementById('wish-detail-link-input').value.trim() || null;
+  if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
+  try {
+    await db.collection('families').doc(state.familyId).collection('wishes').doc(editingWishId).update({
+      title, category: editingWishCat, notes, link,
+    });
+    toast('수정했어요');
+    closeWishModal();
+  } catch (err) {
+    toast('수정 실패: ' + (err.code || err.message));
   }
 });
 
@@ -807,7 +834,7 @@ document.getElementById('form-wish-add').addEventListener('submit', async (e) =>
     if (linkInput) linkInput.value = '';
     selectedWishCat = 'place';
     document.querySelectorAll('#wish-cat-picker .wish-cat-btn').forEach(b => b.classList.toggle('active', b.dataset.wishCat === 'place'));
-    document.getElementById('wish-notes').placeholder = WISH_NOTES_PLACEHOLDER.place;
+    document.getElementById('wish-notes').placeholder = `상세정보 (선택 · ${WISH_NOTES_EXAMPLES.place})`;
     toast(`"${title}" 담았어요 🔖`);
   } catch (err) {
     if (err.code === 'permission-denied') toast('위시리스트 권한 설정이 필요해요 (규칙 재게시)');
