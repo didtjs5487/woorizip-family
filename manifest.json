@@ -1,7 +1,7 @@
 {
-  "name": "우리집 - 가족 공유 리스트",
-  "short_name": "우리집",
-  "description": "우리 가족의 집안일 · 장보기 · 위시리스트 공유",
+  "name": "위시집 - 보고 싶은 것 모아보기",
+  "short_name": "위시집",
+  "description": "인스타·SNS에서 본 가고 싶은 곳, 먹고 싶은 음식, 갖고 싶은 것을 모아두는 가족 위시리스트",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

@@ -96,7 +96,7 @@ document.getElementById('form-entry').addEventListener('submit', async (e) => {
   errEl.textContent = '';
   createBlock.classList.add('hidden');
   pendingEntry = null;
-  if (!name || !password) { errEl.textContent = '이름과 우리집 암호를 입력해주세요.'; return; }
+  if (!name || !password) { errEl.textContent = '이름과 위시집 암호를 입력해주세요.'; return; }
 
   const submitBtn = document.querySelector('#form-entry button[type=submit]');
   submitBtn.disabled = true;
@@ -125,7 +125,7 @@ document.getElementById('form-entry').addEventListener('submit', async (e) => {
       // no family with this password — offer to create one
       pendingEntry = { name, password };
       document.getElementById('entry-create-text').textContent =
-        `"${password}" 암호로 된 우리집이 아직 없어요. 처음이시면 이 암호로 새로 만들 수 있어요.`;
+        `"${password}" 암호로 된 위시집이 아직 없어요. 처음이시면 이 암호로 새로 만들 수 있어요.`;
       createBlock.classList.remove('hidden');
     }
   } catch (err) {
@@ -146,7 +146,7 @@ document.getElementById('btn-entry-create').addEventListener('click', async () =
     const uid = auth.currentUser.uid;
     const familyRef = db.collection('families').doc();
     await familyRef.set({
-      name: '우리집',
+      name: '위시집',
       sharedPassword: pendingEntry.password,
       createdBy: uid,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -241,7 +241,7 @@ function enterFamily(familyId) {
   state.unsubFamily = db.collection('families').doc(familyId).onSnapshot(snap => {
     if (!snap.exists) return;
     state.familyDoc = snap.data();
-    document.getElementById('family-name-label').textContent = state.familyDoc.name || '우리집';
+    document.getElementById('family-name-label').textContent = state.familyDoc.name || '위시집';
     document.getElementById('invite-code-display').textContent = state.familyDoc.sharedPassword || state.familyDoc.inviteCode || '';
   });
 
@@ -350,7 +350,7 @@ function renderMembers() {
 }
 document.getElementById('btn-copy-invite').addEventListener('click', () => {
   const code = document.getElementById('invite-code-display').textContent;
-  navigator.clipboard?.writeText(code).then(() => toast('우리집 암호를 복사했어요'));
+  navigator.clipboard?.writeText(code).then(() => toast('위시집 암호를 복사했어요'));
 });
 
 /* ===================== Change shared family password ===================== */
@@ -374,12 +374,12 @@ document.getElementById('form-password').addEventListener('submit', async (e) =>
     // make sure another family isn't already using this password
     const dup = await db.collection('families').where('sharedPassword', '==', newPw).limit(1).get();
     if (!dup.empty && dup.docs[0].id !== state.familyId) {
-      errEl.textContent = '다른 우리집이 이미 쓰는 암호예요. 다른 암호를 정해주세요.';
+      errEl.textContent = '다른 위시집이 이미 쓰는 암호예요. 다른 암호를 정해주세요.';
       return;
     }
     await db.collection('families').doc(state.familyId).update({ sharedPassword: newPw });
     passwordModal.classList.add('hidden');
-    toast('우리집 암호를 변경했어요');
+    toast('위시집 암호를 변경했어요');
   } catch (err) {
     errEl.textContent = `변경에 실패했어요 (${err.code || err.message})`;
   }
@@ -549,10 +549,10 @@ document.getElementById('btn-delete-task').addEventListener('click', async () =>
   closeTaskModal();
 });
 
-/* ===================== Request tab: 집안일 / 장보기 / 위시 sub-view toggle (per-device) ===================== */
-const GOODS_VIEWS = ['tasks', 'shopping', 'wish'];
+/* ===================== Request tab: 위시 / 집안일 / 장보기 sub-view toggle (per-device) ===================== */
+const GOODS_VIEWS = ['wish', 'tasks', 'shopping'];
 function applyGoodsView(view) {
-  if (!GOODS_VIEWS.includes(view)) view = 'tasks';
+  if (!GOODS_VIEWS.includes(view)) view = 'wish';
   localStorage.setItem('goodsView', view);
   GOODS_VIEWS.forEach(v => document.getElementById(`goods-view-${v}`).classList.toggle('hidden', v !== view));
   document.querySelectorAll('.status-chip').forEach(b => b.classList.toggle('active', b.dataset.goodsView === view));
@@ -636,7 +636,14 @@ document.getElementById('form-shopping-add').addEventListener('submit', async (e
   linkInput.value = '';
 });
 
-/* ===================== Wishlist (먹고 싶은 것 · 받고 싶은 선물) ===================== */
+/* ===================== Wishlist: 인스타/SNS에서 본 가고 싶은 곳 · 먹고 싶은 음식 · 갖고 싶은 것 ===================== */
+const WISH_CATEGORIES = ['place', 'food', 'gift'];
+const WISH_CAT_META = {
+  place: { emoji: '📍', label: '가고 싶은 곳' },
+  food: { emoji: '🍽️', label: '먹고 싶은 음식' },
+  gift: { emoji: '🛍️', label: '갖고 싶은 것' },
+};
+
 document.querySelectorAll('.wish-filter').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.wish-filter').forEach(b => b.classList.remove('active'));
@@ -655,42 +662,41 @@ function renderWishes() {
   if (state.wishFilter !== 'all') items = items.filter(w => (w.category || 'gift') === state.wishFilter);
 
   if (items.length === 0) {
-    list.innerHTML = '<p class="empty-state">아직 위시가 없어요. 먹고 싶은 것·받고 싶은 선물을 적어보세요 🎁</p>';
+    list.innerHTML = '<p class="empty-state">아직 담아둔 게 없어요. 링크와 함께 하나씩 담아보세요 🔖</p>';
     return;
   }
 
-  // group by requester so each member's wishes are easy to browse separately
-  const byMember = new Map();
+  // group by category (section) first so items are easy to browse by kind, not by who added them
+  const byCategory = new Map();
   items.forEach(w => {
-    const key = w.requestedBy || '?';
-    if (!byMember.has(key)) byMember.set(key, []);
-    byMember.get(key).push(w);
+    const key = WISH_CATEGORIES.includes(w.category) ? w.category : 'gift';
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key).push(w);
   });
-  const memberOrder = [...Object.keys(state.members), ...[...byMember.keys()].filter(k => !state.members[k])];
 
-  memberOrder.forEach(memberId => {
-    const wishItems = byMember.get(memberId);
+  WISH_CATEGORIES.forEach(cat => {
+    const wishItems = byCategory.get(cat);
     if (!wishItems || wishItems.length === 0) return;
-    const m = state.members[memberId];
+    const meta = WISH_CAT_META[cat];
 
     const header = document.createElement('div');
     header.className = 'wish-group-header';
-    header.innerHTML = `
-      <span class="avatar-dot" style="background:${m ? colorFor(m.colorIndex) : '#B9AE94'}">${initialsFor(m?.name || '?')}</span>
-      <span>${escapeHtml(m?.name || '알 수 없음')}</span>
-    `;
+    header.innerHTML = `<span class="wish-group-emoji">${meta.emoji}</span><span>${meta.label}</span><span class="wish-group-count">${wishItems.length}</span>`;
     list.appendChild(header);
 
     wishItems.sort((a,b) => (a.done === b.done) ? 0 : (a.done ? 1 : -1));
     wishItems.forEach(w => {
-      const emoji = w.category === 'food' ? '🍰' : w.category === 'place' ? '🧳' : '🎁';
+      const requester = state.members[w.requestedBy];
       const row = document.createElement('div');
       row.className = 'wish-item' + (w.done ? ' done' : '');
       row.innerHTML = `
-        <span class="wish-emoji">${emoji}</span>
+        <span class="avatar-dot wish-requester-dot" style="background:${requester ? colorFor(requester.colorIndex) : '#B9AE94'}" title="${escapeHtml(requester?.name || '?')}">${initialsFor(requester?.name || '?')}</span>
         <div class="wish-body">
           <span class="wish-name">${escapeHtml(w.title)}</span>
-          ${w.notes ? `<span class="wish-notes">${escapeHtml(w.notes)}</span>` : ''}
+          ${(w.notes || w.link) ? `<span class="wish-sub">
+            ${w.notes ? `<span class="wish-notes">${escapeHtml(w.notes)}</span>` : ''}
+            ${w.link ? `<a class="wish-link" href="${escapeHtml(w.link)}" target="_blank" rel="noopener noreferrer">🔗 링크</a>` : ''}
+          </span>` : ''}
         </div>
         <button class="wish-heart ${w.done ? 'on' : ''}" title="이뤄졌어요">${w.done ? '💖' : '🤍'}</button>
         <button class="wish-delete-btn" title="삭제" aria-label="삭제">✕</button>
@@ -721,17 +727,21 @@ document.getElementById('form-wish-add').addEventListener('submit', async (e) =>
   e.preventDefault();
   const input = document.getElementById('wish-title');
   const notesInput = document.getElementById('wish-notes');
+  const linkInput = document.getElementById('wish-link');
   const title = input.value.trim();
   if (!title) return;
   const category = e.submitter?.dataset.wishCat || 'gift';
   const notes = notesInput?.value.trim() || null;
+  let link = linkInput?.value.trim() || null;
+  if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
   try {
     await db.collection('families').doc(state.familyId).collection('wishes').add({
-      title, category, notes, done: false,
+      title, category, notes, link, done: false,
       requestedBy: state.memberId, createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     input.value = '';
     if (notesInput) notesInput.value = '';
+    if (linkInput) linkInput.value = '';
   } catch (err) {
     if (err.code === 'permission-denied') toast('위시리스트 권한 설정이 필요해요 (규칙 재게시)');
     else toast('추가 실패: ' + (err.code || err.message));

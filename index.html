@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>우리집 | 가족 공유 리스트</title>
+<title>위시집 | 보고 싶은 것 모아보기</title>
 <meta name="theme-color" content="#FFE1EC">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -13,18 +13,18 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="우리집">
+<meta name="apple-mobile-web-app-title" content="위시집">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 
 <!-- SETUP SCREEN (shown only if firebase-config.js isn't filled in) -->
 <div id="screen-setup" class="screen hidden">
   <div class="setup-card">
-    <h1 class="brand">우리집</h1>
+    <h1 class="brand">위시집</h1>
     <p class="setup-title">설정이 하나 남았어요</p>
     <p class="setup-text">이 앱은 Firebase를 백엔드로 사용해요. <code>firebase-config.js</code> 파일을 열어 본인의 Firebase 프로젝트 값을 붙여넣으면 바로 실행돼요.</p>
     <ol class="setup-steps">
@@ -40,12 +40,12 @@
 <!-- ENTRY SCREEN (name + shared family password — no signup) -->
 <div id="screen-entry" class="screen hidden">
   <div class="auth-card">
-    <h1 class="brand">우리집</h1>
-    <p class="tagline">이름과 우리집 암호만 입력하면 끝</p>
+    <h1 class="brand">위시집</h1>
+    <p class="tagline">이름과 위시집 암호만 입력하면 끝</p>
 
     <form id="form-entry" class="auth-form">
       <input type="text" id="entry-name" placeholder="이름 (예: 아빠, 엄마, 민준)" required autocomplete="name">
-      <input type="password" id="entry-password" placeholder="우리집 암호" required autocomplete="off">
+      <input type="password" id="entry-password" placeholder="위시집 암호" required autocomplete="off">
       <button type="submit" class="btn btn-primary">들어가기</button>
       <p class="hint-text" id="entry-hint">가족 중 처음이라면, 원하는 암호를 정해서 그대로 만들 수 있어요.</p>
       <p class="form-error" id="entry-error"></p>
@@ -54,7 +54,7 @@
     <div id="entry-create-block" class="hidden">
       <div class="divider"><span>새로 만들기</span></div>
       <p class="setup-text" id="entry-create-text"></p>
-      <button id="btn-entry-create" class="btn btn-secondary" style="width:100%;margin-top:12px;">이 암호로 우리집 새로 만들기</button>
+      <button id="btn-entry-create" class="btn btn-secondary" style="width:100%;margin-top:12px;">이 암호로 위시집 새로 만들기</button>
     </div>
   </div>
 </div>
@@ -65,7 +65,7 @@
   <div class="app-header-sticky">
     <header class="app-header">
       <div class="header-left">
-        <span class="brand-small">우리집</span>
+        <span class="brand-small">위시집</span>
         <span class="family-name" id="family-name-label"></span>
       </div>
       <div class="header-right">
@@ -82,10 +82,14 @@
     </button>
   </div>
 
-  <!-- REQUEST TAB (home; grouped: 집안일 · 장보기 · 위시) -->
+  <!-- REQUEST TAB (home; grouped: 위시 · 집안일 · 장보기) -->
   <section id="tab-request" class="tab-panel">
     <div class="request-status" id="request-status">
-      <button class="status-chip active" data-goods-view="tasks">
+      <button class="status-chip active" data-goods-view="wish">
+        <span class="status-chip-count" id="status-count-wish">0</span>
+        <span class="status-chip-label">🔖 위시</span>
+      </button>
+      <button class="status-chip" data-goods-view="tasks">
         <span class="status-chip-count" id="status-count-tasks">0</span>
         <span class="status-chip-label">🧹 집안일</span>
       </button>
@@ -93,13 +97,33 @@
         <span class="status-chip-count" id="status-count-shopping">0</span>
         <span class="status-chip-label">🛒 장보기</span>
       </button>
-      <button class="status-chip" data-goods-view="wish">
-        <span class="status-chip-count" id="status-count-wish">0</span>
-        <span class="status-chip-label">🎁 위시</span>
-      </button>
     </div>
 
-    <div id="goods-view-tasks">
+    <div id="goods-view-wish">
+      <div class="section-header">
+        <h2 class="section-title">위시리스트</h2>
+      </div>
+      <p class="wish-hint">인스타·SNS·인터넷에서 본 가고 싶은 곳, 먹고 싶은 음식, 갖고 싶은 것을 링크와 함께 담아두면 섹션별로 정리돼서 찾아보기 쉬워요 🔖</p>
+      <form id="form-wish-add" class="wish-add">
+        <input type="text" id="wish-title" placeholder="예: 마라탕, 무선 이어폰, 제주도" required>
+        <input type="text" id="wish-notes" placeholder="메모 (선택 · 사이즈, 색상, 가격대 등)">
+        <input type="text" id="wish-link" placeholder="링크 (선택 · 인스타, 블로그, 지도 등)" inputmode="url" autocapitalize="off" autocorrect="off">
+        <div class="wish-add-row2">
+          <button type="submit" class="wish-cat-btn" data-wish-cat="place">📍 가고 싶은 곳</button>
+          <button type="submit" class="wish-cat-btn" data-wish-cat="food">🍽️ 먹고 싶은 음식</button>
+          <button type="submit" class="wish-cat-btn" data-wish-cat="gift">🛍️ 갖고 싶은 것</button>
+        </div>
+      </form>
+      <div class="filter-row">
+        <button class="wish-filter active" data-wfilter="all">전체</button>
+        <button class="wish-filter" data-wfilter="place">📍 장소</button>
+        <button class="wish-filter" data-wfilter="food">🍽️ 음식</button>
+        <button class="wish-filter" data-wfilter="gift">🛍️ 물건</button>
+      </div>
+      <div id="wish-list" class="events-list"></div>
+    </div>
+
+    <div id="goods-view-tasks" class="hidden">
       <div class="section-header">
         <h2 class="section-title">집안일</h2>
         <button id="btn-add-task" class="btn btn-pin btn-small">+ 집안일 추가</button>
@@ -124,29 +148,6 @@
       </form>
       <div id="shopping-list" class="events-list"></div>
     </div>
-
-    <div id="goods-view-wish" class="hidden">
-      <div class="section-header">
-        <h2 class="section-title">위시리스트</h2>
-      </div>
-      <p class="wish-hint">먹고 싶은 음식, 받고 싶은 선물, 가보고 싶은 곳을 적어두면 가족이 함께 봐요 💕</p>
-      <form id="form-wish-add" class="wish-add">
-        <input type="text" id="wish-title" placeholder="예: 마라탕, 무선 이어폰, 제주도" required>
-        <input type="text" id="wish-notes" placeholder="메모 (선택 · 사이즈, 색상, 가격대 등)">
-        <div class="wish-add-row2">
-          <button type="submit" class="wish-cat-btn" data-wish-cat="food">🍰 먹고 싶어요</button>
-          <button type="submit" class="wish-cat-btn" data-wish-cat="gift">🎁 갖고 싶어요</button>
-          <button type="submit" class="wish-cat-btn" data-wish-cat="place">🧳 가고 싶어요</button>
-        </div>
-      </form>
-      <div class="filter-row">
-        <button class="wish-filter active" data-wfilter="all">전체</button>
-        <button class="wish-filter" data-wfilter="food">🍰 음식</button>
-        <button class="wish-filter" data-wfilter="gift">🎁 선물</button>
-        <button class="wish-filter" data-wfilter="place">🧳 장소</button>
-      </div>
-      <div id="wish-list" class="events-list"></div>
-    </div>
   </section>
 
   <!-- FAMILY TAB -->
@@ -156,7 +157,7 @@
       <h2 class="section-title">설정</h2>
     </div>
     <div class="family-card">
-      <p class="block-title">우리집 암호</p>
+      <p class="block-title">위시집 암호</p>
       <div class="invite-row">
         <span id="invite-code-display" class="invite-code"></span>
         <button id="btn-copy-invite" class="btn btn-secondary btn-small">복사</button>
@@ -284,11 +285,11 @@
 <div id="modal-password" class="modal-overlay hidden">
   <div class="modal-card">
     <div class="modal-header">
-      <h3>우리집 암호 변경</h3>
+      <h3>위시집 암호 변경</h3>
       <button id="modal-password-close" class="icon-btn" aria-label="닫기">✕</button>
     </div>
     <form id="form-password">
-      <label class="field-label">새 우리집 암호</label>
+      <label class="field-label">새 위시집 암호</label>
       <input type="text" id="new-password" placeholder="새 암호" required autocomplete="off">
       <p class="hint-text">변경 후에는 <strong>새로 들어오는 가족</strong>이 이 새 암호를 입력해야 해요. 이미 들어와 있는 가족은 그대로 사용할 수 있어요.</p>
       <div class="modal-actions">
@@ -318,6 +319,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 
 <script src="firebase-config.js"></script>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
