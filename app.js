@@ -748,6 +748,8 @@ function openWishModal(w) {
     linkEl.classList.add('hidden');
   }
 
+  document.getElementById('wish-detail-empty').classList.toggle('hidden', !!(w.notes || w.link));
+
   const heartBtn = document.getElementById('btn-wish-detail-heart');
   heartBtn.textContent = w.done ? '🤍 다시 담기' : '💖 이뤄졌어요로 표시';
 
