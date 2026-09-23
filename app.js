@@ -634,6 +634,7 @@ document.getElementById('form-shopping-add').addEventListener('submit', async (e
   qtyInput.value = '';
   priceInput.value = '';
   linkInput.value = '';
+  toast(`"${name}" 추가했어요`);
 });
 
 /* ===================== Wishlist: 인스타/SNS에서 본 가고 싶은 곳 · 먹고 싶은 음식 · 갖고 싶은 것 ===================== */
@@ -701,6 +702,7 @@ function renderWishes() {
         <button class="wish-heart ${w.done ? 'on' : ''}" title="이뤄졌어요">${w.done ? '💖' : '🤍'}</button>
         <button class="wish-delete-btn" title="삭제" aria-label="삭제">✕</button>
       `;
+      row.querySelector('.wish-body').addEventListener('click', () => openWishModal(w));
       row.querySelector('.wish-heart').addEventListener('click', (e) => {
         e.stopPropagation();
         toggleWishDone(w);
@@ -723,6 +725,50 @@ async function toggleWishDone(w) {
   });
 }
 
+/* ---- Wish detail modal: tap a card to see the full note + open its saved link ---- */
+const wishModal = document.getElementById('modal-wish');
+let editingWishId = null;
+
+function openWishModal(w) {
+  editingWishId = w.id;
+  const meta = WISH_CAT_META[WISH_CATEGORIES.includes(w.category) ? w.category : 'gift'];
+  const requester = state.members[w.requestedBy];
+  document.getElementById('modal-wish-title').textContent = `${meta.emoji} ${w.title}`;
+  document.getElementById('wish-detail-meta').textContent = `${meta.label} · ${requester?.name || '?'}님이 담음`;
+
+  const notesEl = document.getElementById('wish-detail-notes');
+  notesEl.textContent = w.notes || '';
+  notesEl.classList.toggle('hidden', !w.notes);
+
+  const linkEl = document.getElementById('wish-detail-link');
+  if (w.link) {
+    linkEl.href = w.link;
+    linkEl.classList.remove('hidden');
+  } else {
+    linkEl.classList.add('hidden');
+  }
+
+  const heartBtn = document.getElementById('btn-wish-detail-heart');
+  heartBtn.textContent = w.done ? '🤍 다시 담기' : '💖 이뤄졌어요로 표시';
+
+  wishModal.classList.remove('hidden');
+}
+function closeWishModal() { wishModal.classList.add('hidden'); editingWishId = null; }
+document.getElementById('modal-wish-close').addEventListener('click', closeWishModal);
+wishModal.addEventListener('click', (e) => { if (e.target === wishModal) closeWishModal(); });
+document.getElementById('btn-wish-detail-heart').addEventListener('click', async () => {
+  const w = state.wishes[editingWishId];
+  if (w) await toggleWishDone(w);
+  closeWishModal();
+});
+document.getElementById('btn-delete-wish').addEventListener('click', async () => {
+  if (!editingWishId) return;
+  if (confirm('이 위시를 삭제할까요?')) {
+    await db.collection('families').doc(state.familyId).collection('wishes').doc(editingWishId).delete();
+    closeWishModal();
+  }
+});
+
 document.getElementById('form-wish-add').addEventListener('submit', async (e) => {
   e.preventDefault();
   const input = document.getElementById('wish-title');
@@ -742,6 +788,7 @@ document.getElementById('form-wish-add').addEventListener('submit', async (e) =>
     input.value = '';
     if (notesInput) notesInput.value = '';
     if (linkInput) linkInput.value = '';
+    toast(`"${title}" 담았어요 🔖`);
   } catch (err) {
     if (err.code === 'permission-denied') toast('위시리스트 권한 설정이 필요해요 (규칙 재게시)');
     else toast('추가 실패: ' + (err.code || err.message));

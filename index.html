@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 
@@ -103,6 +103,15 @@
       <div class="section-header">
         <h2 class="section-title">위시리스트</h2>
       </div>
+      <div class="filter-row">
+        <button class="wish-filter active" data-wfilter="all">전체</button>
+        <button class="wish-filter" data-wfilter="place">📍 장소</button>
+        <button class="wish-filter" data-wfilter="food">🍽️ 음식</button>
+        <button class="wish-filter" data-wfilter="gift">🛍️ 물건</button>
+      </div>
+      <div id="wish-list" class="events-list"></div>
+
+      <div class="divider section-divider"><span>새로 담기</span></div>
       <p class="wish-hint">인스타·SNS·인터넷에서 본 가고 싶은 곳, 먹고 싶은 음식, 갖고 싶은 것을 링크와 함께 담아두면 섹션별로 정리돼서 찾아보기 쉬워요 🔖</p>
       <form id="form-wish-add" class="wish-add">
         <input type="text" id="wish-title" placeholder="예: 마라탕, 무선 이어폰, 제주도" required>
@@ -114,13 +123,6 @@
           <button type="submit" class="wish-cat-btn" data-wish-cat="gift">🛍️ 갖고 싶은 것</button>
         </div>
       </form>
-      <div class="filter-row">
-        <button class="wish-filter active" data-wfilter="all">전체</button>
-        <button class="wish-filter" data-wfilter="place">📍 장소</button>
-        <button class="wish-filter" data-wfilter="food">🍽️ 음식</button>
-        <button class="wish-filter" data-wfilter="gift">🛍️ 물건</button>
-      </div>
-      <div id="wish-list" class="events-list"></div>
     </div>
 
     <div id="goods-view-tasks" class="hidden">
@@ -135,6 +137,9 @@
       <div class="section-header">
         <h2 class="section-title">장보기</h2>
       </div>
+      <div id="shopping-list" class="events-list"></div>
+
+      <div class="divider section-divider"><span>새로 담기</span></div>
       <form id="form-shopping-add" class="wish-add">
         <div class="shopping-add-row">
           <input type="text" id="shopping-item-name" placeholder="예: 화장지, 우유" required>
@@ -146,7 +151,6 @@
         </div>
         <button type="submit" class="btn btn-pin btn-small shopping-add-btn">+ 추가</button>
       </form>
-      <div id="shopping-list" class="events-list"></div>
     </div>
   </section>
 
@@ -222,6 +226,25 @@
       </div>
       <p class="form-error" id="task-error"></p>
     </form>
+  </div>
+</div>
+
+<!-- WISH DETAIL MODAL -->
+<div id="modal-wish" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="modal-wish-title">위시 상세</h3>
+      <button id="modal-wish-close" class="icon-btn" aria-label="닫기">✕</button>
+    </div>
+    <div class="wish-detail">
+      <p class="wish-detail-meta" id="wish-detail-meta"></p>
+      <p class="wish-detail-notes hidden" id="wish-detail-notes"></p>
+      <a id="wish-detail-link" class="btn btn-secondary wish-detail-link-btn hidden" target="_blank" rel="noopener noreferrer">🔗 링크로 이동</a>
+    </div>
+    <div class="modal-actions">
+      <button type="button" id="btn-delete-wish" class="btn btn-ghost">삭제</button>
+      <button type="button" id="btn-wish-detail-heart" class="btn btn-primary">💖 이뤄졌어요로 표시</button>
+    </div>
   </div>
 </div>
 
@@ -319,6 +342,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 
 <script src="firebase-config.js"></script>
-<script src="app.js?v=17"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>

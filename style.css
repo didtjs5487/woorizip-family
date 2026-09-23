@@ -162,6 +162,7 @@ button, input, select, textarea { font-family: inherit; }
 .divider { text-align: center; color: var(--ink-soft); font-size: 12px; margin: 20px 0; position: relative; }
 .divider::before, .divider::after { content:''; position:absolute; top:50%; width:40%; height:1px; background:var(--border); }
 .divider::before { left:0; } .divider::after { right:0; }
+.section-divider { margin: 28px 0 18px; }
 
 /* ===== App shell ===== */
 #screen-app { display: block; padding: 0; min-height: 100dvh; }
@@ -237,13 +238,13 @@ button, input, select, textarea { font-family: inherit; }
 .shopping-item.purchased { opacity: .5; }
 .shopping-item.purchased .shopping-name { text-decoration: line-through; }
 .shopping-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.shopping-name { font-weight: 600; font-size: 14.5px; }
+.shopping-name { font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
 .shopping-qty { font-weight: 500; font-size: 12.5px; color: var(--ink-soft); font-family: var(--font-mono); }
-.shopping-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.shopping-price { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--marigold); }
-.shopping-link { font-size: 12px; font-weight: 600; color: #4F8A82; text-decoration: none; }
+.shopping-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.shopping-price { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--marigold); flex-shrink: 0; }
+.shopping-link { font-size: 12px; font-weight: 600; color: #4F8A82; text-decoration: none; flex-shrink: 0; }
 .shopping-link:active { opacity: .6; }
-.shopping-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); }
+.shopping-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); overflow-wrap: anywhere; }
 .shopping-delete-btn { background: none; border: none; color: var(--ink-soft); font-size: 15px; line-height: 1; cursor: pointer; padding: 4px; }
 .shopping-delete-btn:active { color: var(--danger); }
 /* ===== Wishlist ===== */
@@ -277,11 +278,11 @@ button, input, select, textarea { font-family: inherit; }
 .wish-item.done { opacity: .55; }
 .wish-item.done .wish-name { text-decoration: line-through; }
 .wish-requester-dot { width: 26px; height: 26px; font-size: 11px; flex-shrink: 0; }
-.wish-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.wish-name { font-weight: 600; font-size: 14.5px; }
-.wish-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.wish-notes { font-size: 12px; color: var(--ink-soft); }
-.wish-link { font-size: 12px; font-weight: 600; color: #4F8A82; text-decoration: none; }
+.wish-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; cursor: pointer; }
+.wish-name { font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
+.wish-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.wish-notes { font-size: 12px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.wish-link { font-size: 12px; font-weight: 600; color: #4F8A82; text-decoration: none; flex-shrink: 0; }
 .wish-link:active { opacity: .6; }
 .wish-heart { background: none; border: none; font-size: 20px; cursor: pointer; padding: 2px; line-height: 1; }
 .wish-heart:active { transform: scale(0.9); }
@@ -410,6 +411,10 @@ button, input, select, textarea { font-family: inherit; }
 .event-time-block .field-label { margin: 9px 0 5px; }
 .modal-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; align-items: center; }
 .modal-actions .btn-primary { flex: 1; }
+
+.wish-detail-meta { color: var(--ink-soft); font-size: 12.5px; margin: 0 0 10px; }
+.wish-detail-notes { font-size: 14.5px; line-height: 1.55; margin: 0 0 14px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.wish-detail-link-btn { display: block; width: 100%; text-align: center; box-sizing: border-box; text-decoration: none; }
 
 /* ===== Toasts ===== */
 .toast-container { position: fixed; top: 14px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 100; pointer-events: none; }
