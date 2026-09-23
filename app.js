@@ -96,7 +96,7 @@ document.getElementById('form-entry').addEventListener('submit', async (e) => {
   errEl.textContent = '';
   createBlock.classList.add('hidden');
   pendingEntry = null;
-  if (!name || !password) { errEl.textContent = '이름과 위시집 암호를 입력해주세요.'; return; }
+  if (!name || !password) { errEl.textContent = '이름과 인생찜 암호를 입력해주세요.'; return; }
 
   const submitBtn = document.querySelector('#form-entry button[type=submit]');
   submitBtn.disabled = true;
@@ -125,7 +125,7 @@ document.getElementById('form-entry').addEventListener('submit', async (e) => {
       // no family with this password — offer to create one
       pendingEntry = { name, password };
       document.getElementById('entry-create-text').textContent =
-        `"${password}" 암호로 된 위시집이 아직 없어요. 처음이시면 이 암호로 새로 만들 수 있어요.`;
+        `"${password}" 암호로 된 인생찜이 아직 없어요. 처음이시면 이 암호로 새로 만들 수 있어요.`;
       createBlock.classList.remove('hidden');
     }
   } catch (err) {
@@ -146,7 +146,7 @@ document.getElementById('btn-entry-create').addEventListener('click', async () =
     const uid = auth.currentUser.uid;
     const familyRef = db.collection('families').doc();
     await familyRef.set({
-      name: '위시집',
+      name: '인생찜',
       sharedPassword: pendingEntry.password,
       createdBy: uid,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -241,7 +241,7 @@ function enterFamily(familyId) {
   state.unsubFamily = db.collection('families').doc(familyId).onSnapshot(snap => {
     if (!snap.exists) return;
     state.familyDoc = snap.data();
-    document.getElementById('family-name-label').textContent = state.familyDoc.name || '위시집';
+    document.getElementById('family-name-label').textContent = state.familyDoc.name || '인생찜';
     document.getElementById('invite-code-display').textContent = state.familyDoc.sharedPassword || state.familyDoc.inviteCode || '';
   });
 
@@ -350,7 +350,7 @@ function renderMembers() {
 }
 document.getElementById('btn-copy-invite').addEventListener('click', () => {
   const code = document.getElementById('invite-code-display').textContent;
-  navigator.clipboard?.writeText(code).then(() => toast('위시집 암호를 복사했어요'));
+  navigator.clipboard?.writeText(code).then(() => toast('인생찜 암호를 복사했어요'));
 });
 
 /* ===================== Change shared family password ===================== */
@@ -374,12 +374,12 @@ document.getElementById('form-password').addEventListener('submit', async (e) =>
     // make sure another family isn't already using this password
     const dup = await db.collection('families').where('sharedPassword', '==', newPw).limit(1).get();
     if (!dup.empty && dup.docs[0].id !== state.familyId) {
-      errEl.textContent = '다른 위시집이 이미 쓰는 암호예요. 다른 암호를 정해주세요.';
+      errEl.textContent = '다른 인생찜이 이미 쓰는 암호예요. 다른 암호를 정해주세요.';
       return;
     }
     await db.collection('families').doc(state.familyId).update({ sharedPassword: newPw });
     passwordModal.classList.add('hidden');
-    toast('위시집 암호를 변경했어요');
+    toast('인생찜 암호를 변경했어요');
   } catch (err) {
     errEl.textContent = `변경에 실패했어요 (${err.code || err.message})`;
   }

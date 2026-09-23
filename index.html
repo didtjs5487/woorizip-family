@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>위시집 | 보고 싶은 것 모아보기</title>
+<title>인생찜 | 보고 싶은 것 모아보기</title>
 <meta name="theme-color" content="#FFE1EC">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="위시집">
+<meta name="apple-mobile-web-app-title" content="인생찜">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -24,7 +24,7 @@
 <!-- SETUP SCREEN (shown only if firebase-config.js isn't filled in) -->
 <div id="screen-setup" class="screen hidden">
   <div class="setup-card">
-    <h1 class="brand">위시집</h1>
+    <h1 class="brand">인생찜</h1>
     <p class="setup-title">설정이 하나 남았어요</p>
     <p class="setup-text">이 앱은 Firebase를 백엔드로 사용해요. <code>firebase-config.js</code> 파일을 열어 본인의 Firebase 프로젝트 값을 붙여넣으면 바로 실행돼요.</p>
     <ol class="setup-steps">
@@ -40,12 +40,12 @@
 <!-- ENTRY SCREEN (name + shared family password — no signup) -->
 <div id="screen-entry" class="screen hidden">
   <div class="auth-card">
-    <h1 class="brand">위시집</h1>
-    <p class="tagline">이름과 위시집 암호만 입력하면 끝</p>
+    <h1 class="brand">인생찜</h1>
+    <p class="tagline">이름과 인생찜 암호만 입력하면 끝</p>
 
     <form id="form-entry" class="auth-form">
       <input type="text" id="entry-name" placeholder="이름 (예: 아빠, 엄마, 민준)" required autocomplete="name">
-      <input type="password" id="entry-password" placeholder="위시집 암호" required autocomplete="off">
+      <input type="password" id="entry-password" placeholder="인생찜 암호" required autocomplete="off">
       <button type="submit" class="btn btn-primary">들어가기</button>
       <p class="hint-text" id="entry-hint">가족 중 처음이라면, 원하는 암호를 정해서 그대로 만들 수 있어요.</p>
       <p class="form-error" id="entry-error"></p>
@@ -54,7 +54,7 @@
     <div id="entry-create-block" class="hidden">
       <div class="divider"><span>새로 만들기</span></div>
       <p class="setup-text" id="entry-create-text"></p>
-      <button id="btn-entry-create" class="btn btn-secondary" style="width:100%;margin-top:12px;">이 암호로 위시집 새로 만들기</button>
+      <button id="btn-entry-create" class="btn btn-secondary" style="width:100%;margin-top:12px;">이 암호로 인생찜 새로 만들기</button>
     </div>
   </div>
 </div>
@@ -65,7 +65,7 @@
   <div class="app-header-sticky">
     <header class="app-header">
       <div class="header-left">
-        <span class="brand-small">위시집</span>
+        <span class="brand-small">인생찜</span>
         <span class="family-name" id="family-name-label"></span>
       </div>
       <div class="header-right">
@@ -157,7 +157,7 @@
       <h2 class="section-title">설정</h2>
     </div>
     <div class="family-card">
-      <p class="block-title">위시집 암호</p>
+      <p class="block-title">인생찜 암호</p>
       <div class="invite-row">
         <span id="invite-code-display" class="invite-code"></span>
         <button id="btn-copy-invite" class="btn btn-secondary btn-small">복사</button>
@@ -285,11 +285,11 @@
 <div id="modal-password" class="modal-overlay hidden">
   <div class="modal-card">
     <div class="modal-header">
-      <h3>위시집 암호 변경</h3>
+      <h3>인생찜 암호 변경</h3>
       <button id="modal-password-close" class="icon-btn" aria-label="닫기">✕</button>
     </div>
     <form id="form-password">
-      <label class="field-label">새 위시집 암호</label>
+      <label class="field-label">새 인생찜 암호</label>
       <input type="text" id="new-password" placeholder="새 암호" required autocomplete="off">
       <p class="hint-text">변경 후에는 <strong>새로 들어오는 가족</strong>이 이 새 암호를 입력해야 해요. 이미 들어와 있는 가족은 그대로 사용할 수 있어요.</p>
       <div class="modal-actions">
@@ -319,6 +319,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 
 <script src="firebase-config.js"></script>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>
